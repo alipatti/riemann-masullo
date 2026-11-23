@@ -1665,7 +1665,42 @@ theorem sAdeleFiniteZeroSchwartz_tmul_iff (T : Finset V)
     (_hg : ∀ v, g v ≠ 0) :
     let e := (sAdeleSchwartz_inductiveTensor_equiv F S).choose
     e (f ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, g v)) ∈ sAdeleFiniteZeroSchwartz S T ↔
-      ∀ v : S, v.val ∈ T → g v (Multiplicative.ofAdd 0) = 0 := by sorry
+      ∀ v : S, v.val ∈ T → g v (Multiplicative.ofAdd 0) = 0 := by
+  intro e
+  have key : ∀ x : SAdeleRing F S, e (f ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, g v)) (Multiplicative.ofAdd x) =
+      f (Multiplicative.ofAdd x.1) * ∏ w : S, g w (Multiplicative.ofAdd (x.2 w)) :=
+    (sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec f g
+  have mem : ∀ h : ℬₛ, h ∈ sAdeleFiniteZeroSchwartz S T ↔ ∀ x : SAdeleRing F S,
+      (∃ v : S, v.val ∈ T ∧ x.2 v = 0) → h (Multiplicative.ofAdd x) = 0 := by
+    intro h
+    simp only [sAdeleFiniteZeroSchwartz, Submodule.mem_iInf, LinearMap.mem_ker]
+    exact ⟨fun H x hx ↦ H ⟨x, hx⟩, fun H x ↦ H x.1 x.2⟩
+  rw [mem]
+  constructor
+  · intro H v hv
+    obtain ⟨a, ha⟩ : ∃ a, f a ≠ 0 := by
+      by_contra hc
+      push Not at hc
+      exact _hf (SchwartzBruhat.ext hc)
+    have hb : ∀ w, ∃ b, g w b ≠ 0 := fun w ↦ by
+      by_contra hc
+      push Not at hc
+      exact _hg w (SchwartzBruhat.ext hc)
+    choose b hb using hb
+    by_contra h0
+    have := H (Multiplicative.toAdd a, Function.update (fun w ↦ Multiplicative.toAdd (b w)) v 0)
+      ⟨v, hv, by simp⟩
+    rw [key, mul_eq_zero, Finset.prod_eq_zero_iff] at this
+    rcases this with h | ⟨w, -, hw⟩
+    · exact ha h
+    · by_cases hwv : w = v
+      · subst hwv
+        simp only [Function.update_self] at hw
+        exact h0 hw
+      · simp only [Function.update_of_ne hwv, ofAdd_toAdd] at hw
+        exact hb w hw
+  · rintro H x ⟨v, hv, hx⟩
+    rw [key, Finset.prod_eq_zero (Finset.mem_univ v) (by rw [hx]; exact H v hv), mul_zero]
 
 /-- Paper: Proposition 5.3.4.5(3), p. 264.
 The selected finite zero-coordinate conditions cut out the span in (5.3.4.15).
