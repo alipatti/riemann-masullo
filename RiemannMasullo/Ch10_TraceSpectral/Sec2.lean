@@ -133,6 +133,51 @@ theorem spectralSobolevPairing_dual {l r s : ℝ} (hI : l ≤ r) (hs : 0 ≤ s)
     Integrable (fun g ↦ f g * T Λ g) μ𝔽 ∧ Λ f = pair(f, T Λ) := by
   exact (modulatedIntervalSobolev_dual m𝔽 hm𝔽 μ𝔽 l r s hI hs).exists.choose_spec Λ f
 
+/-- Conjugating a weighted L² vector and multiplying by the density gives a vector of the
+reciprocal-weight space whose product integral with the original is its squared norm. -/
+private theorem spectralSobolevPairing_isotype_conj {X : Type*} [MeasurableSpace X] (ν : Measure X)
+    {ρ ρ' : X → ℝ} (hρ : Measurable ρ) (hρ' : Measurable ρ') (hpos : ∀ x, 0 < ρ x)
+    (hpos' : ∀ x, 0 < ρ' x) (hr : ∀ x, ρ x * ρ' x = 1)
+    (f : Lp ℂ 2 (ν.withDensity fun x ↦ ENNReal.ofReal (ρ x))) :
+    ∃ g : Lp ℂ 2 (ν.withDensity fun x ↦ ENNReal.ofReal (ρ' x)),
+      (g : X → ℂ) =ᵐ[ν] (fun x ↦ (ρ x : ℂ) * star (f x)) ∧
+      ∫ x, f x * g x ∂ν = ((‖f‖ ^ 2 : ℝ) : ℂ) := by
+  have hbase {ρ : X → ℝ} (hρ : Measurable ρ) (hpos : ∀ x, 0 < ρ x) :
+      ν ≪ ν.withDensity fun x ↦ ENNReal.ofReal (ρ x) :=
+    withDensity_absolutelyContinuous' hρ.ennreal_ofReal.aemeasurable
+      (ae_of_all _ fun x ↦ (ENNReal.ofReal_pos.mpr (hpos x)).ne')
+  let u : X → ℂ := fun x ↦ (ρ x : ℂ) * star (f x)
+  have hsq (x : X) : ‖u x‖ ^ 2 * ρ' x = ‖f x‖ ^ 2 * ρ x := by
+    calc
+      _ = ‖f x‖ ^ 2 * (ρ x * (ρ x * ρ' x)) := by
+        dsimp only [u]
+        rw [norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_of_pos (hpos x), norm_star]
+        ring
+      _ = _ := by rw [hr, mul_one]
+  have hmeas : AEStronglyMeasurable u (ν.withDensity fun x ↦ ENNReal.ofReal (ρ' x)) :=
+    (Complex.measurable_ofReal.comp hρ).aestronglyMeasurable.mul
+      (((Lp.aestronglyMeasurable f).mono_ac (hbase hρ hpos)).mono_ac
+        (withDensity_absolutelyContinuous _ _)).star
+  have hmem : MemLp u 2 (ν.withDensity fun x ↦ ENNReal.ofReal (ρ' x)) := by
+    apply (memLp_two_iff_integrable_sq_norm hmeas).2
+    apply (integrable_withDensity_iff hρ'.ennreal_ofReal
+      (ae_of_all _ fun _ ↦ ENNReal.ofReal_lt_top)).2
+    refine (weightedL2_norm_eq ν hρ hpos f).1.congr (ae_of_all _ fun x ↦ ?_)
+    change ‖f x‖ ^ 2 * ρ x = ‖u x‖ ^ 2 * (ENNReal.ofReal (ρ' x)).toReal
+    rw [ENNReal.toReal_ofReal (hpos' x).le, hsq]
+  have hcoe : (hmem.toLp u : X → ℂ) =ᵐ[ν] u := (hbase hρ' hpos').ae_eq hmem.coeFn_toLp
+  refine ⟨hmem.toLp u, hcoe, ?_⟩
+  obtain ⟨hint, hnorm⟩ := weightedL2_norm_eq ν hρ hpos f
+  have hI : ∫ x, ‖f x‖ ^ 2 * ρ x ∂ν = ‖f‖ ^ 2 := by
+    rw [hnorm, Real.sq_sqrt (integral_nonneg fun x ↦ mul_nonneg (sq_nonneg _) (hpos x).le)]
+  rw [← hI, ← integral_complex_ofReal]
+  refine integral_congr_ae ?_
+  filter_upwards [hcoe] with x hx
+  rw [hx]
+  dsimp only [u]
+  rw [Complex.star_def, Complex.ofReal_mul, Complex.ofReal_pow, ← Complex.mul_conj']
+  ring
+
 /-- Paper: (10.2.1.3), p. 440, and (10.2.2.3), p. 445. The pairing on a
 positive Sobolev isotype and the conjugate reciprocal-weight isotype is nondegenerate.
 The negative-space isotype is specified by left translation of its representatives. -/
@@ -143,7 +188,83 @@ theorem spectralSobolevPairing_isotype {l r s : ℝ} (hI : l ≤ r) (hs : 0 ≤ 
     (∀ f : Wω(hI, hs, ω), f ≠ 0 →
       ∃ u : W'(l, r, s), IsConjugate u ∧ pair(f.val, u) ≠ 0) ∧
     ∀ u : W'(l, r, s), IsConjugate u → u ≠ 0 →
-      ∃ f : Wω(hI, hs, ω), pair(f.val, u) ≠ 0 := by sorry
+      ∃ f : Wω(hI, hs, ω), pair(f.val, u) ≠ 0 := by
+  intro IsConjugate
+  let w : C𝔽 → ℝ := fun g ↦ intervalSobolevDensity l r s (logNorm g)
+  have hlog : Measurable logNorm :=
+    (NNReal.continuous_coe.comp (Units.continuous_val.comp
+      (isProperMap_ideleClassNorm F).continuous)).measurable.log
+  have hw : Measurable w := (continuous_intervalSobolevDensity' l r s).measurable.comp hlog
+  have hwpos : ∀ x, 0 < w x := fun x ↦ intervalSobolevDensity_pos l r s _
+  have hwk : ∀ (k : C₁) g, w (k.val⁻¹ * g) = w g := by
+    intro k g
+    have hk : ideleClassNorm F k.val = 1 := k.2
+    simp only [w, map_mul, map_inv, hk, inv_one, one_mul]
+  have hbase : μ𝔽 ≪ (μ𝔽).withDensity (fun x ↦ ENNReal.ofReal (w x)) :=
+    withDensity_absolutelyContinuous' hw.ennreal_ofReal.aemeasurable
+      (ae_of_all _ fun x ↦ (ENNReal.ofReal_pos.mpr (hwpos x)).ne')
+  have hwd : ((μ𝔽).withDensity fun x ↦ ENNReal.ofReal (w x)) ≪ μ𝔽 :=
+    withDensity_absolutelyContinuous _ _
+  have hiso (f : W(l, r, s)) : f ∈ Wω(hI, hs, ω) ↔
+      ∀ k : C₁, (fun g ↦ f (k.val⁻¹ * g)) =ᵐ[μ𝔽] fun g ↦ (ω k : ℂ) * f g := by
+    rw [mem_actionIsotype]
+    refine forall_congr' fun k ↦ ?_
+    have htr := hardySobolevTranslation_apply μ𝔽 m𝔽 l r s hI hs k.val f
+    have hsm := hbase.ae_eq (Lp.coeFn_smul (ω k : ℂ) f)
+    change hardySobolevTranslation μ𝔽 m𝔽 l r s hI hs k.val f = (ω k : ℂ) • f ↔ _
+    constructor
+    · intro h
+      rw [h] at htr
+      exact htr.symm.trans hsm
+    · intro h
+      exact Lp.ext (hwd.ae_eq (htr.trans (h.trans hsm.symm)))
+  have hωinv (k : C₁) : ((ω⁻¹ k : Circle) : ℂ) = star (ω k : ℂ) := by
+    rw [show ω⁻¹ k = (ω k)⁻¹ from rfl, Circle.coe_inv_eq_conj]
+    rfl
+  have hqmp (k : C₁) := (measurePreserving_mul_left μ𝔽 k.val⁻¹).quasiMeasurePreserving
+  refine ⟨fun f hf ↦ ?_, fun u hu hu0 ↦ ?_⟩
+  · obtain ⟨u, hu, hpair⟩ : ∃ u : W'(l, r, s),
+        (u : C𝔽 → ℂ) =ᵐ[μ𝔽] (fun x ↦ (w x : ℂ) * star (f.val x)) ∧
+        ∫ x, f.val x * u x ∂μ𝔽 = ((‖f.val‖ ^ 2 : ℝ) : ℂ) :=
+      spectralSobolevPairing_isotype_conj μ𝔽 (ρ := w) (ρ' := fun x ↦ (w x)⁻¹) hw hw.inv hwpos
+        (fun x ↦ inv_pos.2 (hwpos x)) (fun x ↦ mul_inv_cancel₀ (hwpos x).ne') f.val
+    refine ⟨u, fun k ↦ ?_, ?_⟩
+    · have hfk := (hiso f.val).1 f.2 k
+      have hu' := (hqmp k).ae_eq_comp hu
+      filter_upwards [hu', hfk, hu] with g h1 h2 h3
+      simp only [comp_apply] at h1
+      rw [h1, h2, h3, hwk, star_mul']
+      simp only [hωinv]
+      ring
+    · change ∫ g, f.val g * u g ∂μ𝔽 ≠ 0
+      rw [hpair]
+      exact_mod_cast pow_ne_zero 2 (norm_ne_zero_iff.2 fun h ↦ hf (Subtype.ext h))
+  · have key : ∃ f : W(l, r, s),
+        (f : C𝔽 → ℂ) =ᵐ[μ𝔽] (fun x ↦ ((w x)⁻¹ : ℂ) * star (u x)) ∧
+        ∫ x, u x * f x ∂μ𝔽 = ((‖u‖ ^ 2 : ℝ) : ℂ) := by
+      obtain ⟨f, hf, hpair⟩ := spectralSobolevPairing_isotype_conj μ𝔽
+        (ρ := fun x ↦ if true = true then (w x)⁻¹ else w x)
+        (ρ' := fun x ↦ if false = true then (w x)⁻¹ else w x)
+        (by simp only [↓reduceIte]; exact hw.inv)
+        (by simpa using hw) (by simpa using fun x ↦ inv_pos.2 (hwpos x)) (by simpa using hwpos)
+        (fun x ↦ by simpa using inv_mul_cancel₀ (hwpos x).ne') u
+      refine ⟨f, ?_, ?_⟩
+      · filter_upwards [hf] with x hx
+        rw [hx]
+        simp only [↓reduceIte, Complex.ofReal_inv]
+      · exact hpair
+    obtain ⟨f, hf, hpair⟩ := key
+    refine ⟨⟨f, (hiso f).2 fun k ↦ ?_⟩, ?_⟩
+    · have hf' := (hqmp k).ae_eq_comp hf
+      filter_upwards [hf', hu k, hf] with g h1 h2 h3
+      simp only [comp_apply] at h1
+      rw [h1, h2, h3, hwk, star_mul']
+      simp only [hωinv, star_star]
+      ring
+    · change ∫ g, f g * u g ∂μ𝔽 ≠ 0
+      simp_rw [mul_comm (f _)]
+      rw [hpair]
+      exact_mod_cast pow_ne_zero 2 (norm_ne_zero_iff.2 hu0)
 
 variable (F) in
 /-- Paper: (10.2.1.3), p. 440, and (10.2.2.3), p. 445. Pull a functional
