@@ -278,6 +278,109 @@ theorem sobolevProjectiveKernel_existsUnique_l2 (hα : 0 ≤ α) (hs : 0 ≤ s)
     ∃! k : L²mixed, integrates(μ𝔽, sobolevProjectiveKernelOperator (F := F) hα hs K, k) :=
   by sorry
 
+/-- Paper: (10.4.3.23)–(10.4.3.25), p. 470.
+The product of two weighted square-integrable functions lies in the mixed product space. -/
+private theorem sobolevProjectiveKernel_l2_tmul_memLp
+    {F : Type*} [Field F] [NumberField F]
+    {α s : ℝ}
+    (v : (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦
+        Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s true)) (u : (CompactIntervalSobolev
+        (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦ Real.log ((ideleClassNorm F
+        g).val : ℝ)) (-α) α s)) :
+    MemLp (fun p : (IdeleClassGroup (𝓞 F) F) × (IdeleClassGroup (𝓞 F) F) ↦ v p.2 * u p.1) 2
+      ((((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity
+          (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ))))).prod (((ideleClassTamagawaMeasure
+          F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity (-α) α s (Real.log
+          ((ideleClassNorm F g).val : ℝ)))⁻¹))) := by
+  have hu := Lp.memLp u
+  have hv := Lp.memLp v
+  have hm : AEStronglyMeasurable (fun p : (IdeleClassGroup (𝓞 F) F) × (IdeleClassGroup (𝓞 F) F) ↦ v
+      p.2 * u p.1)
+      ((((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity
+          (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ))))).prod (((ideleClassTamagawaMeasure
+          F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity (-α) α s (Real.log
+          ((ideleClassNorm F g).val : ℝ)))⁻¹))) :=
+    hv.aestronglyMeasurable.comp_snd.mul hu.aestronglyMeasurable.comp_fst
+  refine (eLpNorm_lt_top_iff_lintegral_rpow_eNorm_lt_top (by norm_num)
+    (by norm_num) hm).mpr ?_
+  simp only [eNorm_mul, ENNReal.mul_rpow_of_nonneg _ _ (by positivity : 0 ≤ (2 : ENNReal).toReal)]
+  simp_rw [mul_comm (‖v _‖ₑ ^ (2 : ENNReal).toReal)]
+  rw [lintegral_prod_mul (f := fun x ↦ ‖u x‖ₑ ^ (2 : ENNReal).toReal)
+    (g := fun y ↦ ‖v y‖ₑ ^ (2 : ENNReal).toReal)
+    (by fun_prop) (by fun_prop)]
+  exact ENNReal.mul_lt_top
+    (lintegral_rpow_eNorm_lt_top_of_eLpNorm_lt_top (by norm_num) (by norm_num) hu.eLpNorm_lt_top)
+    (lintegral_rpow_eNorm_lt_top_of_eLpNorm_lt_top (by norm_num) (by norm_num) hv.eLpNorm_lt_top)
+
+/-- Paper: (10.4.3.23)–(10.4.3.25), p. 470.
+An almost-everywhere product representative integrates to the elementary tensor operator. -/
+private theorem sobolevProjectiveKernel_l2_tmul_integrates
+    {F : Type*} [Field F] [NumberField F] {α s : ℝ}
+    (hα : 0 ≤ α) (hs : 0 ≤ s) (v : (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g :
+        IdeleClassGroup (𝓞 F) F ↦ Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s true)) (u :
+        (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦
+        Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s))
+    (k : Lp ℂ 2 ((((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal
+        (intervalSobolevDensity (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ))))).prod
+        (((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity
+        (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ)))⁻¹))))
+    (hk : (k : (IdeleClassGroup (𝓞 F) F) × (IdeleClassGroup (𝓞 F) F) → ℂ)
+        =ᵐ[(((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal
+        (intervalSobolevDensity (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ))))).prod
+        (((ideleClassTamagawaMeasure F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity
+        (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ)))⁻¹))]
+      (fun p ↦ v p.2 * u p.1)) :
+    ∀ f : (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦
+        Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s), ∀ᵐ x ∂(ideleClassTamagawaMeasure F),
+      Integrable (fun y ↦ k (x, y) * f y) (ideleClassTamagawaMeasure F) ∧
+      (sobolevProjectiveKernelOperator (F := F) hα hs
+      ((show ProjectiveTensor (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g :
+          IdeleClassGroup (𝓞 F) F ↦ Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s true)
+          (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦
+          Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s) from v ⊗ₜ[ℂ] u) :
+        Completion (ProjectiveTensor (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g :
+            IdeleClassGroup (𝓞 F) F ↦ Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s true)
+            (CompactIntervalSobolev (ideleClassTamagawaMeasure F) (fun g : IdeleClassGroup (𝓞 F) F ↦
+            Real.log ((ideleClassNorm F g).val : ℝ)) (-α) α s))) f : (IdeleClassGroup (𝓞 F) F) → ℂ)
+            x = ∫ y, k (x, y) * f y ∂(ideleClassTamagawaMeasure F) := by
+  have hw : Measurable ((fun g : IdeleClassGroup (𝓞 F) F ↦ intervalSobolevDensity (-α) α s (Real.log
+      ((ideleClassNorm F g).val : ℝ)))) :=
+    ((continuous_intervalSobolevDensity (-α) α s).comp
+      (continuous_logModule' (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ :
+          IdeleClassGroup (𝓞 F) F →ₜ* ℝ≥0ˣ))).measurable
+  have hp (x : (IdeleClassGroup (𝓞 F) F)) : 0 < (fun g : IdeleClassGroup (𝓞 F) F ↦
+      intervalSobolevDensity (-α) α s (Real.log ((ideleClassNorm F g).val : ℝ))) x :=
+      intervalSobolevDensity_pos' _ _ _ _
+  have ha (p : (IdeleClassGroup (𝓞 F) F) → Prop) (h : ∀ᵐ x ∂((ideleClassTamagawaMeasure
+      F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity (-α) α s (Real.log
+      ((ideleClassNorm F g).val : ℝ)))), p x) : ∀ᵐ x ∂(ideleClassTamagawaMeasure F), p x := by
+    exact ((ae_withDensity_iff hw.ennreal_ofReal).mp h).mono
+      (fun x hx ↦ hx (ne_of_gt (ENNReal.ofReal_pos.mpr (hp x))))
+  have ha' (p : (IdeleClassGroup (𝓞 F) F) → Prop) (h : ∀ᵐ x ∂((ideleClassTamagawaMeasure
+      F).withDensity fun g ↦ ENNReal.ofReal (intervalSobolevDensity (-α) α s (Real.log
+      ((ideleClassNorm F g).val : ℝ)))⁻¹), p x) : ∀ᵐ x ∂(ideleClassTamagawaMeasure F), p x := by
+    exact ((ae_withDensity_iff hw.inv.ennreal_ofReal).mp h).mono
+      (fun x hx ↦ hx (ne_of_gt (ENNReal.ofReal_pos.mpr (inv_pos.mpr (hp x)))))
+  have hk' := ha _ (Measure.ae_ae_of_ae_prod hk)
+  intro f
+  let T := (modulatedIntervalSobolev_dual (⟨ideleClassNorm F, (isProperMap_ideleClassNorm
+      F).continuous⟩ : IdeleClassGroup (𝓞 F) F →ₜ* ℝ≥0ˣ)
+    ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+    (ideleClassTamagawaMeasure F) (-α) α s ((neg_nonpos.mpr hα).trans hα) hs).exists.choose
+  have hi : Integrable (fun y ↦ f y * v y) (ideleClassTamagawaMeasure F) := by
+    have hh := (spectralSobolevPairing_dual ((neg_nonpos.mpr hα).trans hα) hs (T.symm v) f).1
+    simpa only [T, LinearIsometryEquiv.apply_symm_apply] using hh
+  have hu := ha _ (Lp.coeFn_smul (spectralSobolevPairing (F := F) f v) u)
+  filter_upwards [hk', hu] with x hx hux
+  have he : (fun y ↦ k (x, y) * f y) =ᵐ[(ideleClassTamagawaMeasure F)] (fun y ↦ (f y * v y) * u x)
+      := by
+    filter_upwards [ha' _ hx] with y hy
+    rw [hy]
+    ring
+  refine ⟨(hi.mul_const (u x)).congr he.symm, ?_⟩
+  rw [sobolevProjectiveKernelOperator_tmul, hux, integral_congr_ae he, integral_mul_const]
+  rfl
+
 /-- Paper: (10.4.3.23)–(10.4.3.25), p. 470. An elementary tensor has
 mixed-weight representative given by the product of its factors.
 Deviation: The reciprocal-weight factor is evaluated at the input coordinate. -/
@@ -287,7 +390,12 @@ theorem sobolevProjectiveKernel_l2_tmul (hα : 0 ≤ α) (hs : 0 ≤ s)
       (k : C𝔽 × C𝔽 → ℂ) =ᵐ[(ν(α, s)).prod (ν'(α, s))] (fun p ↦ v p.2 * u p.1) ∧
       integrates(μ𝔽, sobolevProjectiveKernelOperator (F := F) hα hs
         ((show ProjectiveTensor W'(α, s) W(α, s) from v ⊗ₜ[ℂ] u) : Π(W'(α, s), W(α, s))), k) :=
-  by sorry
+  by
+    let h := sobolevProjectiveKernel_l2_tmul_memLp (F := F) v u
+    let k : L²mixed := h.toLp (fun p ↦ v p.2 * u p.1)
+    refine ⟨k, ?_, ?_⟩
+    · exact h.coeFn_toLp
+    · exact sobolevProjectiveKernel_l2_tmul_integrates (F := F) hα hs v u k h.coeFn_toLp
 
 /-- Paper: (10.4.3.23)–(10.4.3.25), p. 470. A projective tensor has
 a mixed-weight kernel class giving its operator under Haar integration.
