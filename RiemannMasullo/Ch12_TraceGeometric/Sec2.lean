@@ -538,7 +538,121 @@ include hH hν hS in
 /-- Paper: Situation 12.2.2.1, p. 508. The quotient images of the neighborhoods in
 the fundamental domain form a D′-sequence for the normalized quotient Haar measure. -/
 theorem IsDiagonalIndentationSituation.quotient :
-    IsDPrimeSequence ν Ū := by sorry
+    IsDPrimeSequence ν Ū := by
+  have : Countable H :=
+    (TopologicalSpace.separableSpace_iff_countable).mp inferInstance
+  have : IsClosed (H : Set G) := hH
+  have : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  have : ν.IsHaarMeasure := hν.1
+  obtain ⟨hD, ⟨⟨hU1, hUanti, C, hC, hUC⟩, hUcof⟩, hU⟩ := hS
+  have hFD : IsFundamentalDomain H D μ := hD.isFundamentalDomain
+  let p := QuotientGroup.mk' H
+  have hpc : Continuous p := QuotientGroup.continuous_mk
+  have hpm : Measurable p := hpc.measurable
+  have hpo : IsOpenMap p := QuotientGroup.isOpenMap_coe
+  have hpH (h : H) : p h = 1 := (QuotientGroup.eq_one_iff _).mpr h.2
+  let ν' : Measure (G ⧸ H) := (μ.restrict D).map p
+  have hν'_apply (S : Set (G ⧸ H)) (hS : MeasurableSet S) : ν' S = μ (p ⁻¹' S ∩ D) := by
+    rw [Measure.map_apply hpm hS, Measure.restrict_apply (hpm hS)]
+  have hpre (V : Set G) : p ⁻¹' (p '' V) = ⋃ h : H, h • V := by
+    ext x
+    simp only [mem_preimage, mem_image, mem_iUnion, Subgroup.smul_def]
+    constructor
+    · rintro ⟨v, hv, hvx⟩
+      have hm : v⁻¹ * x ∈ H := QuotientGroup.eq.mp hvx
+      refine ⟨⟨v⁻¹ * x, hm⟩, mem_smul_set.mpr ⟨v, hv, ?_⟩⟩
+      simp [smul_eq_mul, mul_comm]
+    · rintro ⟨h, hx⟩
+      obtain ⟨v, hv, rfl⟩ := mem_smul_set.mp hx
+      refine ⟨v, hv, ?_⟩
+      simp only [smul_eq_mul, map_mul]
+      rw [hpH h, one_mul]
+  -- the quotient image of an open set has at most its measure
+  have hle (V : Set G) (hV : IsOpen V) : ν' (p '' V) ≤ μ V := by
+    rw [hν'_apply _ (hpo V hV).measurableSet, hpre, iUnion_inter, hFD.measure_eq_tsum V]
+    exact measure_iUnion_le _
+  -- equality on subsets of the domain
+  have heq (V : Set G) (hV : IsOpen V) (hVD : V ⊆ D) : ν' (p '' V) = μ V := by
+    rw [hν'_apply _ (hpo V hV).measurableSet]
+    congr 1
+    ext x
+    refine ⟨fun ⟨⟨v, hv, hvx⟩, hxD⟩ ↦ ?_, fun hx ↦ ⟨⟨x, hx, rfl⟩, hVD hx⟩⟩
+    have hm : v⁻¹ * x ∈ H := QuotientGroup.eq.mp hvx
+    obtain ⟨a, -, ha⟩ := hD.2.1 v
+    have h1 : (⟨x * v⁻¹, by simpa [mul_comm] using hm⟩ : H) = 1 :=
+      (ha _ (by simpa [Subgroup.smul_def, smul_eq_mul] using hxD)).trans
+        (ha 1 (by simpa using hVD hv)).symm
+    have : x * v⁻¹ = 1 := congrArg Subtype.val h1
+    rwa [mul_inv_eq_one.mp this]
+  have hinv : ν'.IsMulLeftInvariant := by
+    refine ⟨fun g ↦ ?_⟩
+    obtain ⟨x, rfl⟩ := QuotientGroup.mk'_surjective H g
+    ext S hS
+    rw [Measure.map_apply (measurable_const_mul _) hS, hν'_apply _ (measurable_const_mul _ hS),
+      hν'_apply _ hS]
+    have hT : MeasurableSet (p ⁻¹' S) := hpm hS
+    have h1 : p ⁻¹' ((fun y ↦ p x * y) ⁻¹' S) ∩ D =
+        (fun y ↦ x * y) ⁻¹' (p ⁻¹' S ∩ x • D) := by
+      ext y
+      simp only [mem_inter_iff, mem_preimage, map_mul]
+      rw [← smul_eq_mul x y, smul_mem_smul_set_iff]
+    rw [h1, measure_preimage_mul]
+    refine (hFD.smul_of_comm x).measure_set_eq hFD hT fun h ↦ ?_
+    ext y
+    simp only [mem_preimage, Subgroup.smul_def, smul_eq_mul, map_mul]
+    rw [hpH h, one_mul]
+  have hfin : IsFiniteMeasureOnCompacts ν' := by
+    refine ⟨fun K hK ↦ ?_⟩
+    let E := CompactExhaustion.choice G
+    obtain ⟨n, hn⟩ := hK.elim_directed_cover (fun n ↦ p '' interior (E n))
+      (fun _ ↦ hpo _ isOpen_interior) (by
+        rintro q -
+        obtain ⟨x, rfl⟩ := QuotientGroup.mk'_surjective H q
+        obtain ⟨n, hx⟩ := E.exists_mem x
+        exact mem_iUnion.mpr ⟨n + 1, x, E.subset_interior_succ _ hx, rfl⟩)
+      (Monotone.directed_le fun _ _ h ↦ image_mono (interior_mono (E.subset h)))
+    exact ((measure_mono hn).trans ((hle _ isOpen_interior).trans
+      (measure_mono interior_subset))).trans_lt (E.isCompact n).measure_lt_top
+  have hcl (V : Set G) (hV : IsCompact (closure V)) : IsCompact (closure (p '' V)) :=
+    (hV.image hpc).of_isClosed_subset isClosed_closure
+      (closure_minimal (image_mono subset_closure) (hV.image hpc).isClosed)
+  set c := Measure.haarScalarFactor ν' ν
+  have hscale (V : Set G) (hV : IsCompact (closure V)) : ν' (p '' V) = c • ν (p '' V) :=
+    Measure.measure_isMulInvariant_eq_smul_of_isCompact_closure ν' ν (hcl V hV)
+  have hUo (k : ℕ) : IsOpen (p '' U k) := hpo _ (hU k).2.1
+  have hUUo (k : ℕ) : IsOpen (U k * (U k)⁻¹) := (hU k).2.1.mul_right
+  have hUUc (k : ℕ) : IsCompact (closure (U k * (U k)⁻¹)) := by
+    have hK := (hU k).2.2.1
+    exact (hK.mul hK.inv).of_isClosed_subset isClosed_closure
+      (closure_minimal (mul_subset_mul subset_closure (inv_subset_inv.mpr subset_closure))
+        (hK.mul hK.inv).isClosed)
+  have himg (k : ℕ) : p '' U k * (p '' U k)⁻¹ = p '' (U k * (U k)⁻¹) := by
+    rw [image_mul, image_inv]
+  have hc0 : (c : ℝ≥0∞) ≠ 0 := by
+    intro h0
+    have := hscale (U 0) (hU 0).2.2.1
+    rw [heq _ (hU 0).2.1 (hU 0).1, ENNReal.smul_def, smul_eq_mul, h0, zero_mul] at this
+    exact (hU1 0).2.2.1.ne' this
+  refine ⟨⟨fun k ↦ ⟨⟨1, (hU1 k).1, map_one p⟩, (hUo k).measurableSet.nullMeasurableSet,
+    (hUo k).measure_pos ν ⟨1, 1, (hU1 k).1, map_one p⟩,
+    (measure_mono subset_closure).trans_lt (hcl _ (hU k).2.2.1).measure_lt_top⟩,
+    fun a b hab ↦ image_mono (hUanti hab), C, hC, fun k ↦ ⟨?_, ?_⟩⟩, ?_⟩
+  · rw [himg]
+    exact (hpo _ (hUUo k)).measure_pos ν ⟨1, 1, ⟨1, (hU1 k).1, 1, by simpa using (hU1 k).1,
+      by simp⟩, map_one p⟩
+  · rw [himg]
+    have h1 := hscale _ (hUUc k)
+    have h2 := hscale _ (hU k).2.2.1
+    rw [ENNReal.smul_def, smul_eq_mul] at h1 h2
+    rw [heq _ (hU k).2.1 (hU k).1] at h2
+    have h3 : (c : ℝ≥0∞) * ν (p '' (U k * (U k)⁻¹)) <
+        (c : ℝ≥0∞) * (ENNReal.ofReal C * ν (p '' U k)) := by
+      rw [← h1, mul_left_comm, ← h2]
+      exact (hle _ (hUUo k)).trans_lt (hUC k).2
+    exact (ENNReal.mul_lt_mul_iff_right hc0 ENNReal.coe_ne_top).mp h3
+  · intro W hW
+    obtain ⟨k, hk⟩ := hUcof _ (hpc.continuousAt.preimage_mem_nhds (by simpa using hW))
+    exact ⟨k, image_subset_iff.mpr hk⟩
 
 /-- Paper: (12.2.2.1), p. 508. Multiply the two indentation factors and integrate
 their simultaneous subgroup translates. -/
