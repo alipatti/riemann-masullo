@@ -1308,12 +1308,185 @@ def sLocalFunctionalEquation_extra_epsilon : Prop :=
           sLocalIdelicZFunction (sAdeleSchwartzFourier f) (dualₛ(F, S) c)
 
 /-- Paper: Equation (7.2.1.17), p. 337.
+The printed identity forces epsilon to equal one wherever the zeta integral
+is nonzero in the critical strip. -/
+private theorem sLocalFunctionalEquation_extra_epsilon_false_forced
+    (h : sLocalFunctionalEquation_extra_epsilon.{u})
+    (F : Type u) [Field F] [NumberField F]
+    (S : Finset (HeightOneSpectrum (𝓞 F)))
+    (χ : PontryaginDual (SIdeleQuotient F S))
+    (f : SchwartzBruhat (Multiplicative (SAdeleRing F S)))
+    (s : ℂ) (hs : s.re ∈ Ioo (0 : ℝ) 1)
+    (hn : sLocalIdelicZetaIntegral f (twistₛ(F, S) ((circleToComplex).comp χ) s) ≠ 0) :
+    sLocalEpsilonFactor (twistₛ(F, S) ((circleToComplex).comp χ) s) = 1 := by
+  let C := twistₛ(F, S) ((circleToComplex).comp χ)
+  let Z (z : ℂ) := sLocalIdelicZetaIntegral f (C z)
+  let E (z : ℂ) := sLocalEpsilonFactor (C z)
+  have he : ∀ᶠ z in 𝓝[≠] s, Z z = E z * Z z := by
+    have hstrip : ∀ᶠ z in 𝓝[≠] s, z.re ∈ Ioo (0 : ℝ) 1 :=
+      nhdsWithin_le_nhds ((isOpen_Ioo.preimage Complex.continuous_re).mem_nhds hs)
+    filter_upwards [hstrip, nhdsNE_le_codiscrete s (h F S χ f),
+      nhdsNE_le_codiscrete s (sLocalRhoFactor_eq_div_fourierEulerProduct ((circleToComplex).comp χ))]
+      with z hz hp hr
+    have hpos : 0 < (1 - z).re := by simpa using sub_pos.mpr hz.2
+    have hd := sLocal_dual_normTwist (F := F) (S := S) χ z
+    dsimp only at hp
+    rw [sLocalIdelicZFunction_eq_integral f ⟨χ, z, hz.1, rfl⟩,
+      sLocalIdelicZFunction_eq_integral (sAdeleSchwartzFourier f)
+        ⟨χ⁻¹, 1 - z, hpos, hd⟩, ← hr] at hp
+    have hf := sLocalIdelicZetaIntegral_functionalEquation f χ z hz
+    change Z z = E z * Z z
+    calc
+      Z z = E z * sLocalRhoFactor (C z) *
+          sLocalIdelicZetaIntegral (sAdeleSchwartzFourier f)
+            (dualQuasiCharacter (sIdeleQuotientNorm F S)
+              (isProperMap_sIdeleQuotientNorm F S).continuous (C z)) := hp
+      _ = E z * Z z := by rw [mul_assoc, ← hf]
+  have hZ : ContinuousAt Z s := (sLocalIdelicZetaIntegral_analyticOn f χ s hs.1).continuousAt
+  have hE : ContinuousAt E s := (sLocalEpsilonFactor_entire χ s trivial).continuousAt
+  have heq : Z s = E s * Z s := tendsto_nhds_unique
+    (hZ.tendsto.mono_left nhdsWithin_le_nhds)
+    (((hE.mul hZ).tendsto.mono_left nhdsWithin_le_nhds).congr' (he.mono fun _ hz ↦ hz.symm))
+  exact (mul_right_cancel₀ hn (heq.symm.trans (one_mul (Z s)).symm))
+
+/-- Paper: Equation (7.2.1.17), p. 337.
+A standard Gaussian tensor has nonzero zeta integral on the positive real
+half-plane of the trivial component. -/
+private theorem sLocalFunctionalEquation_extra_epsilon_false_nonzero
+    (F : Type u) [Field F] [NumberField F]
+    (S : Finset (HeightOneSpectrum (𝓞 F))) (s : ℂ) (hs : 0 < s.re) :
+    ∃ f : SchwartzBruhat (Multiplicative (SAdeleRing F S)),
+      sLocalIdelicZetaIntegral f
+        (twistₛ(F, S) ((circleToComplex).comp (1 : PontryaginDual (SIdeleQuotient F S))) s) ≠ 0 := by
+  classical
+  let χ : PontryaginDual (SIdeleQuotient F S) := 1
+  let c := twistₛ(F, S) ((circleToComplex).comp χ) s
+  let χArch : (w : InfinitePlace F) → PontryaginDual w.Completionˣ := fun _ ↦ 1
+  have hχ : ∀ w, (circleToComplex).comp (χArch w) =
+      sLocalInfiniteRestriction w ((circleToComplex).comp χ) := fun w ↦ by ext g; rfl
+  obtain ⟨f, hf⟩ := sLocalPrincipalPartCoeff_eigendistribution_tensor S
+    (fun w ↦ infiniteStandardGaussian w (χArch w))
+    (fun v ↦ finiteStandardGaussian v.val (sLocalFiniteRestriction v c))
+  have hE := sLocalNormalizedEigendistribution_gaussian χ s χArch hχ f hf
+  have hspec := (existsUnique_sLocalNormalizedEigendistribution c).exists.choose_spec f
+  have hN : sLocalNormalizedZFunction f c ≠ 0 := by
+    rw [← hspec]
+    change _ * sLocalNormalizedEigendistribution c f ≠ 0
+    rw [hE, mul_one]
+    apply Complex.ofReal_ne_zero.mpr
+    apply Finset.prod_ne_zero_iff.mpr
+    intro v _
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_ne_zero]
+    refine ⟨ENNReal.inv_ne_zero.mpr ENNReal.ofReal_ne_top, ENNReal.inv_ne_top.mpr ?_⟩
+    refine (ENNReal.ofReal_pos.mpr (Real.sqrt_pos.mpr (pow_pos ?_ _))).ne'
+    exact_mod_cast (HeightOneSpectrum.one_lt_absNorm v.val).trans' zero_lt_one
+  refine ⟨f, fun h0 ↦ hN ?_⟩
+  have hdiv := sLocalNormalizedZFunction_eq_div f χ hs
+  exact hdiv.trans (by rw [show sLocalIdelicZetaIntegral f c = 0 from h0, zero_div])
+
+/-- Paper: Equation (7.2.1.17), p. 337.
+A universe lift of the fourth cyclotomic field has a prime dividing its
+different, by the discriminant bound for nontrivial number fields. -/
+private theorem sLocalFunctionalEquation_extra_epsilon_false_ramified_exists :
+    ∃ (F : Type u) (_ : Field F) (_ : NumberField F)
+      (v : HeightOneSpectrum (𝓞 F)), v.asIdeal ∣ differentIdeal ℤ (𝓞 F) := by
+  let K := CyclotomicField 4 ℚ
+  let : IsCyclotomicExtension {4} ℚ K := CyclotomicField.isCyclotomicExtension 4 ℚ
+  let : NumberField K := IsCyclotomicExtension.numberField {4} ℚ K
+  let F := ULift.{u} K
+  let : NumberField F := NumberField.of_ringEquiv K F ULift.ringEquiv.symm
+  have hF : 1 < Module.finrank ℚ F := by
+    rw [ULift.ringEquiv.toRatAlgEquiv.toLinearEquiv.finrank_eq,
+      IsCyclotomicExtension.finrank K (Polynomial.cyclotomic.irreducible_rat (by decide : 0 < 4))]
+    decide
+  have hdisc := NumberField.abs_discr_gt_two hF
+  have hnorm := NumberField.absNorm_differentIdeal F (𝓞 F)
+  have htop : differentIdeal ℤ (𝓞 F) ≠ ⊤ := by
+    intro ht
+    rw [ht, Ideal.absNorm_top] at hnorm
+    have : |discr F| = 1 := by
+      rw [Int.abs_eq_natAbs, ← hnorm]; rfl
+    omega
+  obtain ⟨M, hM, hle⟩ := Ideal.exists_le_maximal _ htop
+  have hbot : M ≠ ⊥ := fun hb ↦ differentIdeal_ne_bot (hb ▸ hle |> le_bot_iff.mp)
+  exact ⟨F, inferInstance, inferInstance, ⟨M, hM.isPrime, hbot⟩, Ideal.dvd_iff_le.mpr hle⟩
+
+/-- Paper: Equation (7.2.1.17), p. 337.
+For the trivial character and one finite place, epsilon is the local
+different norm raised to the exponent minus one half. -/
+private theorem sLocalFunctionalEquation_extra_epsilon_false_epsilon
+    (F : Type u) [Field F] [NumberField F]
+    (v : HeightOneSpectrum (𝓞 F)) (s : ℂ) :
+    sLocalEpsilonFactor
+      (twistₛ(F, {v}) ((circleToComplex).comp (1 : PontryaginDual (SIdeleQuotient F {v}))) s) =
+      ((Ideal.absNorm v.asIdeal : ℂ) ^ multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F))) ^
+        (s - 1 / 2) := by
+  classical
+  let S : Finset (HeightOneSpectrum (𝓞 F)) := {v}
+  let C := twistₛ(F, S) ((circleToComplex).comp (1 : PontryaginDual (SIdeleQuotient F S)))
+  let C₀ := twistₛ(F, ∅) ((circleToComplex).comp (1 : PontryaginDual (SIdeleQuotient F ∅)))
+  have harch (w : InfinitePlace F) : sLocalInfiniteRestriction w (C s) =
+      sLocalInfiniteRestriction w (C₀ s) := by
+    ext g
+    exact (sLocalInfiniteRestriction_normTwist w s g).trans
+      (sLocalInfiniteRestriction_normTwist (S := ∅) w s g).symm
+  have ha : (∏ w : InfinitePlace F, infiniteLocalEpsilonFactor w
+      (sLocalInfiniteRestriction w (C s))) = 1 := by
+    simp_rw [harch]
+    have he := sLocalEpsilonFactor_archimedean_trivial (F := F) s
+    have hbase : (circleToComplex).comp (1 : PontryaginDual (SIdeleQuotient F ∅)) = 1 := by ext g; rfl
+    simpa [sLocalEpsilonFactor, C₀, hbase] using he
+  have hfin (w : S) : sLocalFiniteRestriction w (C s) =
+      quasiCharacterNormTwist (Units.map nnNormHom.toMonoidHom)
+        (continuous_finiteLocalModule w.val)
+        ((circleToComplex).comp (1 : PontryaginDual (w.val.adicCompletion F)ˣ)) s := by
+    ext g
+    have hm := sLocalFiniteRestriction_norm w g
+    change (1 : ℂ) * _ ^ (1 : ℂ) = _ at hm
+    rw [one_mul, Complex.cpow_one] at hm
+    change (1 : ℂ) * _ ^ s = 1 * _ ^ s
+    rw [hm]
+  change sLocalEpsilonFactor (C s) = _
+  rw [sLocalEpsilonFactor, ha, one_mul]
+  simp_rw [hfin, finiteLocalEpsilonFactor_norm]
+  have hv (w : S) : w.val = v := Finset.mem_singleton.mp w.property
+  simp_rw [hv]
+  simp [S]
+
+/-- Paper: Equation (7.2.1.17), p. 337.
+At exponent one quarter, a prime dividing the different contributes an
+epsilon factor strictly below one, contradicting the printed identity. -/
+private theorem sLocalFunctionalEquation_extra_epsilon_false_aux :
+    ¬ sLocalFunctionalEquation_extra_epsilon.{u} := by
+  classical
+  intro h
+  obtain ⟨F, hfield, hnf, v, hv⟩ := sLocalFunctionalEquation_extra_epsilon_false_ramified_exists.{u}
+  let := hfield
+  let := hnf
+  obtain ⟨f, hf⟩ := sLocalFunctionalEquation_extra_epsilon_false_nonzero F {v} (1 / 4) (by norm_num)
+  have he := sLocalFunctionalEquation_extra_epsilon_false_forced h F {v} 1 f (1 / 4) (by norm_num) hf
+  rw [sLocalFunctionalEquation_extra_epsilon_false_epsilon] at he
+  let d := multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F))
+  have hd : 0 < d := multiplicity_pos_of_dvd hv
+    (Ideal.finiteMultiplicity v.isPrime.ne_top differentIdeal_ne_bot)
+  let q : ℝ := (Ideal.absNorm v.asIdeal : ℝ) ^ d
+  have hq : 1 < q := one_lt_pow₀ (by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v) hd.ne'
+  have hcast : (q : ℂ) = (Ideal.absNorm v.asIdeal : ℂ) ^ d := by
+    simp [q]
+  change ((Ideal.absNorm v.asIdeal : ℂ) ^ d) ^ ((1 : ℂ) / 4 - 1 / 2) = 1 at he
+  rw [← hcast, show (1 : ℂ) / 4 - 1 / 2 = ((-(1 / 4) : ℝ) : ℂ) by push_cast; ring,
+    ← Complex.ofReal_cpow (le_of_lt (zero_lt_one.trans hq))] at he
+  have hreal : q ^ (-(1 / 4) : ℝ) = 1 := Complex.ofReal_injective (by simpa using he)
+  exact (Real.rpow_lt_one_of_one_lt_of_neg hq (by norm_num)).ne hreal
+
+/-- Paper: Equation (7.2.1.17), p. 337.
 For ℚ(i) with the complex place and the place over 2, take the trivial unitary
 base and its standard Gaussian tensor. At exponent 1/4 the zeta integral is
 nonzero and the epsilon factor is not one. The ratio already contains epsilon,
 so the proposed identity fails on a neighborhood of that exponent. -/
 theorem sLocalFunctionalEquation_extra_epsilon_false :
-    ¬ sLocalFunctionalEquation_extra_epsilon := by sorry
+    ¬ sLocalFunctionalEquation_extra_epsilon :=
+  sLocalFunctionalEquation_extra_epsilon_false_aux
 
 open Classical in
 /-- Paper: Proposition 7.2.2.1, p. 339.
