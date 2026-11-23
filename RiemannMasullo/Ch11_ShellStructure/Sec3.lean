@@ -419,12 +419,77 @@ region in the definition of β consists of ideles that are units outside S. -/
 def sLocalDivisorialStratum (S : Finset V) : Set I𝔽 :=
   {g | ∀ v ∉ S, Valued.v (g.val.2 v) = 1}
 
+/-- the finite components of an idele and its inverse multiply to one. -/
+private theorem mem_sLocalDivisorialStratum_iff_inv_mul {F : Type*} [Field F] [NumberField F]
+    (g : IdeleGroup (𝓞 F) F) (v : HeightOneSpectrum (𝓞 F)) :
+    (g⁻¹).val.2 v * g.val.2 v = 1 := by
+  change ((g⁻¹ * g : IdeleGroup (𝓞 F) F).val).2 v = 1
+  rw [inv_mul_cancel]
+  rfl
+
+/-- an idele component has valuation one exactly when it and the inverse component are
+integral. -/
+private theorem mem_sLocalDivisorialStratum_iff_valued_eq_one {F : Type*} [Field F]
+    [NumberField F] (g : IdeleGroup (𝓞 F) F) (v : HeightOneSpectrum (𝓞 F)) :
+    Valued.v (g.val.2 v) = 1 ↔
+      g.val.2 v ∈ v.adicCompletionIntegers F ∧ (g⁻¹).val.2 v ∈ v.adicCompletionIntegers F := by
+  have h := congrArg Valued.v (mem_sLocalDivisorialStratum_iff_inv_mul g v)
+  rw [map_mul, map_one] at h
+  simp only [HeightOneSpectrum.mem_adicCompletionIntegers]
+  constructor
+  · intro h1
+    rw [h1, mul_one] at h
+    exact ⟨h1.le, h.le⟩
+  · rintro ⟨h1, h2⟩
+    refine le_antisymm h1 ?_
+    calc (1 : _) = Valued.v ((g⁻¹).val.2 v) * Valued.v (g.val.2 v) := h.symm
+      _ ≤ 1 * Valued.v (g.val.2 v) := mul_le_mul_left h2 _
+      _ = Valued.v (g.val.2 v) := one_mul _
+
 /-- Paper: §11.3.2, p. 495. The region of β is the product of the inserted
 S-ideles and the outside integer unit group. -/
 theorem mem_sLocalDivisorialStratum_iff (S : Finset V) (g : I𝔽) :
     g ∈ sLocalDivisorialStratum F S ↔
       ∃ (a : (SAdeleRing F S)ˣ) (u : outsideIntegralIdeleUnits F S),
-        g = sIdeleInsertion F S a * u.val := by sorry
+        g = sIdeleInsertion F S a * u.val := by
+  constructor
+  · intro hg
+    set b := sIdeleInsertion F S (Units.map (adeleProjection F S).toMonoidHom g)
+    obtain ⟨hb1, hbS, hbout⟩ :=
+      sIdeleInsertion_apply F S (Units.map (adeleProjection F S).toMonoidHom g)
+    have hinv1 : (b⁻¹).val.1 * b.val.1 = 1 := by
+      change ((b⁻¹ * b : I𝔽).val).1 = 1
+      rw [inv_mul_cancel]
+      rfl
+    refine ⟨_, ⟨b⁻¹ * g, ?_⟩, (mul_inv_cancel_left b g).symm⟩
+    rw [mem_outsideIntegralIdeleUnits_iff]
+    refine ⟨?_, fun w hw ↦ ?_, fun w hw ↦ ?_⟩
+    · change (b⁻¹).val.1 * g.val.1 = 1
+      rw [← hinv1, hb1]
+      rfl
+    · change (b⁻¹).val.2 w * g.val.2 w = 1
+      rw [← mem_sLocalDivisorialStratum_iff_inv_mul b w, hbS ⟨w, hw⟩]
+      rfl
+    · have hbw : (b⁻¹).val.2 w = 1 := by
+        have h := mem_sLocalDivisorialStratum_iff_inv_mul b w
+        rwa [hbout w hw, mul_one] at h
+      have h1 : (b⁻¹ * g).val.2 w = g.val.2 w := by
+        change (b⁻¹).val.2 w * g.val.2 w = _
+        rw [hbw, one_mul]
+      have h2 : ((b⁻¹ * g)⁻¹).val.2 w = (g⁻¹).val.2 w := by
+        rw [mul_inv_rev, inv_inv]
+        change (g⁻¹).val.2 w * b.val.2 w = _
+        rw [hbout w hw, mul_one]
+      rw [h1, h2]
+      exact (mem_sLocalDivisorialStratum_iff_valued_eq_one g w).1 (hg w hw)
+  · rintro ⟨a, ⟨u, hu⟩, rfl⟩ v hv
+    obtain ⟨-, -, hu⟩ := (mem_outsideIntegralIdeleUnits_iff u).1 hu
+    have hb := (sIdeleInsertion_apply F S a).2.2 v hv
+    have hval : (sIdeleInsertion F S a * u).val.2 v = u.val.2 v := by
+      change (sIdeleInsertion F S a).val.2 v * u.val.2 v = _
+      rw [hb, one_mul]
+    rw [hval]
+    exact (mem_sLocalDivisorialStratum_iff_valued_eq_one u v).2 (hu v hv)
 
 /-- Paper: §11.3.2, p. 495, and (D.1.10.1), p. 783. The region of β is the range
 of the insertion of the ideles integral outside S. -/
