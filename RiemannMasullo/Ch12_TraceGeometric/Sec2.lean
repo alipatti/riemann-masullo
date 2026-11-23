@@ -884,6 +884,164 @@ theorem diagonalIndentationLift_mul (ρ : C_c(Q × Q, ℂ)) :
   intro p
   exact mul_left_comm _ _ _
 
+/-- Weil's formula bounds the pushforward of a compact restriction by a multiple of the
+restricted quotient measure. -/
+private theorem ae_tendsto_diagonalIndentationLift_average_map_le
+    {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
+    [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+    [MeasurableSpace G] [BorelSpace G] (H : Subgroup G)
+    [DiscreteTopology H] (hH : IsClosed (H : Set G))
+    (μ : Measure G) [μ.IsHaarMeasure] (ν : Measure (G ⧸ H))
+    (hν : IsWeilQuotientMeasure H μ Measure.count ν) {K : Set G} (hK : IsCompact K) :
+    ∃ N : ℝ≥0∞, N ≠ ∞ ∧
+      (μ.restrict K).map (QuotientGroup.mk' H) ≤
+        N • ν.restrict (QuotientGroup.mk' H '' K) := by
+  let : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  let : IsClosed (H : Set G) := hH
+  let : ν.IsHaarMeasure := hν.1
+  let : (Measure.count : Measure H).IsHaarMeasure :=
+    { lt_top_of_isCompact := fun _ hs ↦ Measure.count_apply_lt_top.mpr hs.finite_of_discrete
+      open_pos := fun _ _ hs ↦ Measure.count_ne_zero hs }
+  let : Countable H := TopologicalSpace.separableSpace_iff_countable.mp inferInstance
+  let : LocallyCompactSpace H := hH.locallyCompactSpace
+  let qmap : G → G ⧸ H := QuotientGroup.mk' H
+  have hqmap : Measurable qmap := QuotientGroup.continuous_mk.measurable
+  let B : Set H := (Subtype.val : H → G) ⁻¹' (K⁻¹ * K)
+  have hB : B.Finite := (hH.isClosedEmbedding_subtypeVal.isCompact_preimage
+    (hK.inv.mul hK)).finite_of_discrete
+  have hBfin : Measure.count B ≠ ∞ := (Measure.count_apply_lt_top.mpr hB).ne
+  refine ⟨Measure.count B, hBfin, ?_⟩
+  have hπK : IsCompact (qmap '' K) := hK.image QuotientGroup.continuous_mk
+  have hcount (x : G) : Measure.count {h : H | x * (h : G) ∈ K} ≤ Measure.count B := by
+    rcases eq_empty_or_nonempty {h : H | x * (h : G) ∈ K} with he | ⟨h0, hh0⟩
+    · simp [he]
+    · calc _ ≤ Measure.count ((fun h ↦ h0 * h) '' B) := measure_mono ?_
+        _ = _ := Measure.count_injective_image (mul_right_injective h0) B
+      intro h hh
+      refine ⟨h0⁻¹ * h, ?_, by simp⟩
+      change ((h0 : G)⁻¹ * (h : G)) ∈ K⁻¹ * K
+      refine ⟨(x * h0)⁻¹, by simpa using hh0, x * h, hh, ?_⟩
+      simp only [mul_inv_rev]
+      rw [mul_assoc, inv_mul_cancel_left]
+  have hquot (q : G ⧸ H) (h : H) : qmap (q.out * (h : G)) = q := by
+    have hh : qmap (h : G) = 1 := (QuotientGroup.eq_one_iff _).mpr h.property
+    change (QuotientGroup.mk' H) (q.out * (h : G)) = q
+    dsimp only [qmap] at hh
+    rw [map_mul, hh, mul_one]
+    exact Quotient.out_eq' q
+  rw [Measure.le_iff]
+  intro S hS
+  rw [Measure.map_apply hqmap hS, Measure.restrict_apply (hqmap hS), smul_apply,
+    Measure.restrict_apply hS, smul_eq_mul]
+  let E := qmap ⁻¹' S ∩ K
+  have hE : MeasurableSet E := (hqmap hS).inter hK.isClosed.measurableSet
+  let f : G → ℂ := E.indicator (fun _ ↦ 1)
+  have hf : Measurable f := measurable_const.indicator hE
+  have hfib (q : G ⧸ H) : (∫⁻ h : H, ‖f (q.out * (h : G))‖ₑ ∂Measure.count) ≤
+      (S ∩ qmap '' K).indicator (fun _ ↦ Measure.count B) q := by
+    by_cases hq : q ∈ S ∩ qmap '' K
+    · rw [indicator_of_mem hq]
+      have hmeasK : MeasurableSet {h : H | q.out * (h : G) ∈ K} :=
+        hK.isClosed.measurableSet.preimage
+          (continuous_const.mul continuous_subtype_val).measurable
+      calc _ ≤ ∫⁻ h : H, {h : H | q.out * (h : G) ∈ K}.indicator 1 h ∂Measure.count := by
+            refine lintegral_mono fun h ↦ ?_
+            by_cases hy : q.out * (h : G) ∈ E
+            · have hyK : q.out * (h : G) ∈ K := (show _ ∈ qmap ⁻¹' S ∩ K from hy).2
+              simp [f, hy, hyK]
+            · simp [f, hy]
+        _ = Measure.count {h : H | q.out * (h : G) ∈ K} := lintegral_indicator_one hmeasK
+        _ ≤ _ := hcount _
+    · rw [indicator_of_notMem hq]
+      have hz (h : H) : f (q.out * (h : G)) = 0 := by
+        refine indicator_of_notMem (fun hy ↦ ?_) _
+        obtain ⟨hy1, hy2⟩ := (show _ ∈ qmap ⁻¹' S ∩ K from hy)
+        rw [mem_preimage, hquot q h] at hy1
+        exact hq ⟨hy1, q.out * (h : G), hy2, hquot q h⟩
+      simp [hz]
+  have hlint : (∫⁻ q, ∫⁻ h : H, ‖f (q.out * (h : G))‖ₑ ∂Measure.count ∂ν) ≤
+      Measure.count B * ν (S ∩ qmap '' K) :=
+    (lintegral_mono hfib).trans
+      (lintegral_indicator_const (hS.inter hπK.isClosed.measurableSet) _).le
+  have hfin : (∫⁻ q, ∫⁻ h : H, ‖f (q.out * (h : G))‖₊ ∂Measure.count ∂ν) < ⊤ := by
+    refine lt_of_le_of_lt (le_of_eq_of_le ?_ hlint) (ENNReal.mul_lt_top hBfin.lt_top
+      ((measure_mono inter_subset_right).trans_lt hπK.measure_lt_top))
+    simp only [eNorm_eq_nnNorm]
+  obtain ⟨-, he⟩ := integrable_of_weilNormIntegral H hH μ Measure.count ν hν hf hfin
+  have hμE : μ E < ∞ := (measure_mono inter_subset_right).trans_lt hK.measure_lt_top
+  calc μ E = ‖∫ x, f x ∂μ‖ₑ := by
+        rw [integral_indicator_const _ hE]
+        simp only [Measure.real, Complex.real_smul, mul_one]
+        rw [← ofReal_norm, Complex.norm_real, Real.norm_of_nonneg ENNReal.toReal_nonneg,
+          ENNReal.ofReal_toReal hμE.ne]
+    _ = ‖∫ q, lcaCosetIntegral H Measure.count f q ∂ν‖ₑ := by rw [he]
+    _ ≤ ∫⁻ q, ‖lcaCosetIntegral H Measure.count f q‖ₑ ∂ν := eNorm_integral_le_lintegral_eNorm _
+    _ ≤ ∫⁻ q, ∫⁻ h : H, ‖f (q.out * (h : G))‖ₑ ∂Measure.count ∂ν :=
+        lintegral_mono fun q ↦ eNorm_integral_le_lintegral_eNorm _
+    _ ≤ _ := hlint
+
+
+/-- Termwise squares of a D′-sequence form a D′-sequence for product Haar measure. -/
+private theorem ae_tendsto_diagonalIndentationLift_average_prodSeq
+    {A : Type*} [CommGroup A] [TopologicalSpace A] [IsTopologicalGroup A]
+    [T2Space A] [LocallyCompactSpace A] [SecondCountableTopology A]
+    [MeasurableSpace A] [BorelSpace A] {m : Measure A} [m.IsHaarMeasure]
+    {V : ℕ → Set A} (hV : IsDPrimeSequence m V) :
+    IsDPrimeSequence (m.prod m) (fun n ↦ V n ×ˢ V n) := by
+  have rectSeq [mA : MeasurableSpace (A × A)] (hm : mA = borel _)
+      (η : Measure (A × A)) [η.IsHaarMeasure]
+      (hrect : ∀ s t : Set A, MeasurableSet s → MeasurableSet t → η (s ×ˢ t) = m s * m t) :
+      IsDPrimeSequence η (fun n ↦ V n ×ˢ V n) := by
+    subst mA
+    exact IsDPrimeSequence.prod hrect hV hV
+  exact rectSeq BorelSpace.measurable_eq _ (fun s t _ _ ↦ Measure.prod_prod s t)
+
+/-- The pullback of a locally integrable quotient kernel, times the continuous averaged
+weight, is locally integrable for product Haar measure. -/
+private theorem ae_tendsto_diagonalIndentationLift_average_locallyIntegrable
+    {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
+    [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
+    [MeasurableSpace G] [BorelSpace G] (H : Subgroup G)
+    [DiscreteTopology H] (hH : IsClosed (H : Set G))
+    (μ : Measure G) [μ.IsHaarMeasure] (ν : Measure (G ⧸ H))
+    (hν : IsWeilQuotientMeasure H μ Measure.count ν) {b : G → ℝ}
+    (hw : Continuous (diagonalIndentationWeight H Measure.count b))
+    {u : (G ⧸ H) × (G ⧸ H) → ℂ} (hu : LocallyIntegrable u (ν.prod ν)) :
+    LocallyIntegrable (diagonalIndentationLift H Measure.count b u) (μ.prod μ) := by
+  let : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  let : IsClosed (H : Set G) := hH
+  let : ν.IsHaarMeasure := hν.1
+  have hqm : Measurable (QuotientGroup.mk' H) := QuotientGroup.continuous_mk.measurable
+  have hcomp : LocallyIntegrable
+      (fun p : G × G ↦ u (Prod.map (QuotientGroup.mk' H) (QuotientGroup.mk' H) p))
+      (μ.prod μ) := by
+    refine (locallyIntegrable_iff (μ := μ.prod μ)).mpr fun C hC ↦ ?_
+    have hC1 : IsCompact (Prod.fst '' C) := hC.image continuous_fst
+    have hC2 : IsCompact (Prod.snd '' C) := hC.image continuous_snd
+    obtain ⟨N1, hN1, h1⟩ := ae_tendsto_diagonalIndentationLift_average_map_le H hH μ ν hν hC1
+    obtain ⟨N2, hN2, h2⟩ := ae_tendsto_diagonalIndentationLift_average_map_le H hH μ ν hν hC2
+    refine IntegrableOn.mono_set ?_ (subset_prod (s := C))
+    rw [IntegrableOn, ← Measure.prod_restrict]
+    have hR : IntegrableOn u
+        ((QuotientGroup.mk' H '' (Prod.fst '' C)) ×ˢ (QuotientGroup.mk' H '' (Prod.snd '' C)))
+        (ν.prod ν) :=
+      hu.integrableOn_isCompact
+        ((hC1.image QuotientGroup.continuous_mk).prod (hC2.image QuotientGroup.continuous_mk))
+    have hmap : Integrable u ((((μ.restrict (Prod.fst '' C)).prod
+        (μ.restrict (Prod.snd '' C)))).map
+          (Prod.map (QuotientGroup.mk' H) (QuotientGroup.mk' H))) := by
+      rw [← Measure.map_prod_map _ _ hqm hqm]
+      refine (hR.smul_measure (ENNReal.mul_ne_top hN1 hN2)).mono_measure ?_
+      calc _ ≤ (N1 • ν.restrict (QuotientGroup.mk' H '' (Prod.fst '' C))).prod
+            (N2 • ν.restrict (QuotientGroup.mk' H '' (Prod.snd '' C))) :=
+            Measure.prod_mono h1 h2
+        _ = _ := by
+          rw [Measure.prod_smul_left, Measure.prod_smul_right, Measure.prod_restrict, smul_smul]
+    exact hmap.comp_measurable (hqm.prodMap hqm)
+  refine (hcomp.continuous_smul (hw.comp continuous_id)).congr (ae_of_all _ fun p ↦ ?_)
+  simp [diagonalIndentationLift, Complex.real_smul]
+
+
 -- TODO(paper-gap): The continuous multiplier step on p. 511 applies Corollary
 -- A.5.4.3 at every regular point. The printed equivalence fails (ERRATA R8).
 include hH hν hS hb hu in
@@ -891,7 +1049,24 @@ include hH hν hS hb hu in
 the averages of the lifted kernel converge to the lift of the quotient smoothening. -/
 theorem ae_tendsto_diagonalIndentationLift_average :
     ∀ᵐ p ∂μ.prod μ, Tendsto (fun n ↦
-      dSequenceAverage (μ.prod μ) (U n ×ˢ U n) (Ψ u) p) atTop (𝓝 (Ψ uSmooth p)) := by sorry
+      dSequenceAverage (μ.prod μ) (U n ×ˢ U n) (Ψ u) p) atTop (𝓝 (Ψ uSmooth p)) := by
+  let : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  let : IsClosed (H : Set G) := hH
+  let : ν.IsHaarMeasure := hν.1
+  have hq := aemeasurable_diagonalIndentationLift_quotient_qmp H hH μ ν hν
+  have hseqQ := ae_tendsto_diagonalIndentationLift_average_prodSeq
+    (IsDiagonalIndentationSituation.quotient H hH hν hS)
+  have hloc := ae_tendsto_diagonalIndentationLift_average_locallyIntegrable H hH μ ν hν
+    (continuous_diagonalIndentationWeight H hH hν hS hb) hu
+  have hsmooth : ∀ᵐ y ∂ν.prod ν, uSmooth y = u y := by
+    filter_upwards [ae_tendsto_dSequenceAverage hseqQ hu] with y hy
+    have hreg : y ∈ dSequenceRegularSet (ν.prod ν) (fun n ↦ Ū n ×ˢ Ū n) u := ⟨u y, hy⟩
+    simpa only [dSequenceKernelSmoothening, dSequenceSmootheningOrZero, dite_eq_left hreg,
+      dSequenceSmoothening] using hy.limUnder_eq
+  filter_upwards [ae_tendsto_dSequenceAverage
+    (ae_tendsto_diagonalIndentationLift_average_prodSeq hS.2.1) hloc,
+    (hq.prodMap hq).ae hsmooth] with p hp hpu
+  simpa only [diagonalIndentationLift, hpu] using hp
 
 include hH hν hS hb hu in
 /-- Paper: Proposition 12.2.2.2(4), p. 509. Regularity of a pair for the lifted kernel
@@ -900,7 +1075,20 @@ Deviation: Product-almost-everywhere equivalence replaces the printed every-pair
 theorem ae_diagonalIndentationLift_regular_iff :
     ∀ᵐ p ∂μ.prod μ,
       p ∈ dSequenceRegularSet (μ.prod μ) (fun n ↦ U n ×ˢ U n) (Ψ u) ↔
-        q₂ p ∈ dSequenceRegularSet (ν.prod ν) (fun n ↦ Ū n ×ˢ Ū n) u := by sorry
+        q₂ p ∈ dSequenceRegularSet (ν.prod ν) (fun n ↦ Ū n ×ˢ Ū n) u := by
+  let : BorelSpace (G ⧸ H) := ⟨rfl⟩
+  let : IsClosed (H : Set G) := hH
+  let : ν.IsHaarMeasure := hν.1
+  have hq := aemeasurable_diagonalIndentationLift_quotient_qmp H hH μ ν hν
+  have hseqQ := ae_tendsto_diagonalIndentationLift_average_prodSeq
+    (IsDiagonalIndentationSituation.quotient H hH hν hS)
+  have hloc := ae_tendsto_diagonalIndentationLift_average_locallyIntegrable H hH μ ν hν
+    (continuous_diagonalIndentationWeight H hH hν hS hb) hu
+  filter_upwards [ae_tendsto_dSequenceAverage
+    (ae_tendsto_diagonalIndentationLift_average_prodSeq hS.2.1) hloc,
+    (hq.prodMap hq).ae (mem_ae_iff.mpr (measure_compl_dSequenceRegularSet hseqQ hu))]
+    with p hp hpq
+  exact iff_of_true ⟨_, hp⟩ hpq
 
 -- Remark 12.2.2.3, p. 509. Mathlib's AEMeasurable.nullMeasurable and
 -- NullMeasurable.aemeasurable identify measurability on the completed source
