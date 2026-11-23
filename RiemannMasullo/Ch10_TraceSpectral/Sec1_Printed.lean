@@ -56,11 +56,158 @@ def Printed.sLocalThetaSobolev_openHalfLine_finite : Prop :=
         (fun g ↦ Real.log ((m g).val : ℝ)) (Ioi (-a)) s
         (modulationWeight m a (sLocalAdelicThetaOnClasses F S f)) ≠ ⊤
 
+/-- Paper: Before Lemma 10.1.1.4, p. 435.
+The Gaussian theta dominates its term at the identity S-unit. -/
+private theorem sLocalThetaSobolev_openHalfLine_finite_false_theta_lower
+    (f : SchwartzBruhat (Multiplicative (SAdeleRing ℚ ∅)))
+    (hf : ∀ x : SAdeleRing ℚ ∅, f (Multiplicative.ofAdd x) =
+      ((Real.exp (-‖x.1 Rat.infinitePlace‖ ^ 2) : ℝ) : ℂ))
+    (x : (SAdeleRing ℚ ∅)ˣ) :
+    Real.exp (-‖x.val.1 Rat.infinitePlace‖ ^ 2) ≤
+      ‖sLocalAdelicThetaOnClasses ℚ ∅ f (QuotientGroup.mk x)‖ := by
+  have hs := ((sLocalAdelicTheta_hasSumUniformlyOn ℚ ∅ f {x} isCompact_singleton).hasSum
+    rfl).summable
+  rw [sLocalAdelicThetaOnClasses_mk, sLocalAdelicTheta_apply]
+  simp only [hf] at hs ⊢
+  rw [← Complex.ofReal_tsum, Complex.norm_real, Real.norm_eq_abs]
+  refine le_trans ?_ (le_abs_self _)
+  have hr := Complex.summable_ofReal.mp hs
+  refine le_trans (le_of_eq ?_) (hr.le_tsum 1 fun _ _ ↦ (Real.exp_pos _).le)
+  simp
+
+/-- Paper: Before Lemma 10.1.1.4, p. 435.
+The rational Gaussian has nonzero theta at a class of norm two. -/
+private theorem sLocalThetaSobolev_openHalfLine_finite_false_witness :
+    ∃ f : SchwartzBruhat (Multiplicative (SAdeleRing ℚ ∅)),
+      ∃ g : SIdeleQuotient ℚ ∅,
+        1 < ((sIdeleQuotientNorm ℚ ∅ g).val : ℝ) ∧
+        sLocalAdelicThetaOnClasses ℚ ∅ f g ≠ 0 := by
+  obtain ⟨E, hE⟩ := ratTrivialHomogeneousTheta_quotient_realEquiv
+  let φ : SchwartzMap ℝ ℂ := (SchwartzMap.gaussian 1 one_pos).postcompCLM Complex.ofRealCLM
+  have hf : ∀ x : SAdeleRing ℚ ∅, E φ (Multiplicative.ofAdd x) =
+      ((Real.exp (-‖x.1 Rat.infinitePlace‖ ^ 2) : ℝ) : ℂ) := by
+    intro x
+    rw [hE]
+    have hn (z : Rat.infinitePlace.Completion) : ‖InfinitePlace.Completion.ringEquivRealOfIsReal
+        Rat.isReal_infinitePlace z‖ = ‖z‖ := by
+      rw [← dist_zero_right, ← dist_zero_right z,
+        ← map_zero (InfinitePlace.Completion.ringEquivRealOfIsReal Rat.isReal_infinitePlace)]
+      exact (InfinitePlace.Completion.isometryEquivRealOfIsReal
+        Rat.isReal_infinitePlace).dist_eq z 0
+    have hφ (y : ℝ) : φ y = ((Real.exp (-‖y‖ ^ 2) : ℝ) : ℂ) := by
+      change Complex.ofRealCLM (SchwartzMap.gaussian 1 one_pos y) = _
+      rw [SchwartzMap.gaussian_apply, Complex.ofRealCLM_apply, neg_mul, one_mul]
+    rw [hφ, hn]
+  obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section (F := ℚ) (S := ∅)
+  let u : ℝ≥0ˣ := Units.mk0 2 (by norm_num)
+  let g : SIdeleQuotient ℚ ∅ := σ u
+  have hg : 1 < ((sIdeleQuotientNorm ℚ ∅ g).val : ℝ) := by
+    rw [show sIdeleQuotientNorm ℚ ∅ g = u from hσ u]
+    norm_num [u]
+  obtain ⟨x, hx⟩ := QuotientGroup.mk_surjective g
+  have hpos := sLocalThetaSobolev_openHalfLine_finite_false_theta_lower (E φ) hf x
+  refine ⟨E φ, g, hg, ?_⟩
+  rw [← hx]
+  exact norm_pos_iff.mp (lt_of_lt_of_le (Real.exp_pos _) hpos)
+
+/-- Paper: Before Lemma 10.1.1.4, p. 435.
+A continuous nonzero function at positive log norm has infinite whole half-line Sobolev norm. -/
+private theorem sLocalThetaSobolev_openHalfLine_finite_false_unbounded
+    {G : Type*} [TopologicalSpace G] [MeasurableSpace G] [OpensMeasurableSpace G]
+    (μ : Measure G) [μ.IsOpenPosMeasure]
+    (r : G → ℝ) (hr : Continuous r) (θ : G → ℂ) (hθ : Continuous θ)
+    (g : G) (hrg : 0 < r g) (hθg : θ g ≠ 0) :
+    intervalSobolevENorm μ r (Ioi (-1)) 0 θ = ⊤ := by
+  let c := ‖θ g‖ / 2
+  have hc : 0 < c := half_pos (norm_pos_iff.mpr hθg)
+  have hcg : c < ‖θ g‖ := half_lt_self (norm_pos_iff.mpr hθg)
+  let U := {x | c < ‖θ x‖} ∩ {x | r g / 2 < r x}
+  have hUo : IsOpen U :=
+    (isOpen_lt continuous_const hθ.norm).inter (isOpen_lt continuous_const hr)
+  have hgU : g ∈ U := ⟨hcg, half_lt_self hrg⟩
+  have hUpos : μ U ≠ 0 := (hUo.measure_pos μ ⟨g, hgU⟩).ne'
+  have hε : ENNReal.ofReal c ≠ 0 := (ENNReal.ofReal_pos.mpr hc).ne'
+  have hbound : ∀ σ : ℝ, 0 ≤ σ → ENNReal.ofReal (Real.exp (σ * r g)) * μ U ≤
+      (ENNReal.ofReal c)⁻¹ ^ (2 : ℝ≥0∞).toReal *
+        intervalSobolevENorm μ r (Ioi (-1)) 0 θ ^ (2 : ℝ≥0∞).toReal := by
+    intro σ hσ
+    have hle : eLpNorm θ 2 (μ.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x))) ≤
+        intervalSobolevENorm μ r (Ioi (-1)) 0 θ := by
+      unfold intervalSobolevENorm
+      exact le_iSup₂_of_le (⟨0, by norm_num⟩ : Ioi (-1 : ℝ))
+        (⟨σ, by change -1 < σ; linarith⟩ : Ioi (-1 : ℝ)) le_rfl
+    have hdens : ∀ x ∈ U, ENNReal.ofReal (Real.exp (σ * r g)) ≤
+        ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x)) := by
+      intro x hx
+      apply ENNReal.ofReal_le_ofReal
+      have he : Real.exp (σ * r g) ≤ Real.exp (2 * σ * r x) :=
+        Real.exp_le_exp.mpr (by nlinarith [mul_le_mul_of_nonneg_left hx.2.le hσ])
+      simpa only [intervalSobolevDensity, zero_div, Real.rpow_zero, mul_one] using
+        he.trans (le_max_right (Real.exp (2 * 0 * r x)) _)
+    calc ENNReal.ofReal (Real.exp (σ * r g)) * μ U
+        = ∫⁻ _ in U, ENNReal.ofReal (Real.exp (σ * r g)) ∂μ := (setLIntegral_const _ _).symm
+      _ ≤ ∫⁻ x in U, ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x)) ∂μ :=
+          setLIntegral_mono' hUo.measurableSet hdens
+      _ = (μ.withDensity fun x ↦ ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x))) U :=
+          (withDensity_apply _ hUo.measurableSet).symm
+      _ ≤ (μ.withDensity fun x ↦ ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x)))
+            {x | ENNReal.ofReal c ≤ ‖θ x‖ₑ} := measure_mono fun x hx ↦ by
+          rw [mem_ofPred_eq, ← ofReal_norm]
+          exact ENNReal.ofReal_le_ofReal hx.1.le
+      _ ≤ (ENNReal.ofReal c)⁻¹ ^ (2 : ℝ≥0∞).toReal * eLpNorm θ 2 (μ.withDensity fun x ↦
+            ENNReal.ofReal (intervalSobolevDensity 0 σ 0 (r x))) ^ (2 : ℝ≥0∞).toReal :=
+          meas_ge_le_mul_pow_eLpNorm_eNorm _ two_ne_zero ENNReal.ofNat_ne_top hε
+            fun h ↦ absurd h ENNReal.ofReal_ne_top
+      _ ≤ _ := by gcongr
+  by_contra htop
+  have hBtop : (ENNReal.ofReal c)⁻¹ ^ (2 : ℝ≥0∞).toReal *
+      intervalSobolevENorm μ r (Ioi (-1)) 0 θ ^ (2 : ℝ≥0∞).toReal ≠ ∞ :=
+    ENNReal.mul_ne_top (ENNReal.rpow_ne_top_of_nonneg (by simp) (ENNReal.inv_ne_top.mpr hε))
+      (ENNReal.rpow_ne_top_of_nonneg (by simp) htop)
+  obtain ⟨K, hK, hKle⟩ : ∃ K : ℝ≥0∞, K ≠ ∞ ∧
+      ∀ σ : ℝ, 0 ≤ σ → ENNReal.ofReal (Real.exp (σ * r g)) ≤ K :=
+    ⟨_, ENNReal.div_ne_top hBtop hUpos, fun σ hσ ↦
+      (ENNReal.le_div_iff_mul_le (Or.inl hUpos) (Or.inr hBtop)).mpr (hbound σ hσ)⟩
+  have hlt : K.toReal < Real.exp (max 0 (K.toReal / r g) * r g) := by
+    have h := (div_le_iff₀ hrg).mp (le_max_right 0 (K.toReal / r g))
+    linarith [Real.add_one_le_exp (max 0 (K.toReal / r g) * r g)]
+  exact absurd (hKle _ (le_max_left _ _))
+    (not_le.mpr ((ENNReal.lt_ofReal_iff_toReal_lt hK).mpr hlt))
+
 /-- Paper: Before Lemma 10.1.1.4, p. 435. For ℚ, S = {∞}, a = 1, s = 0,
 and the real Gaussian, the weighted theta is positive throughout [2,3].
 Already the intervals [0,b] give unbounded norms as b tends to infinity. -/
 theorem Printed.sLocalThetaSobolev_openHalfLine_finite_false :
-    ¬ Printed.sLocalThetaSobolev_openHalfLine_finite := by sorry
+    ¬ Printed.sLocalThetaSobolev_openHalfLine_finite := by
+  intro h
+  obtain ⟨f, g, hg, hθg⟩ := sLocalThetaSobolev_openHalfLine_finite_false_witness
+  let m : SIdeleQuotient ℚ ∅ →ₜ* ℝ≥0ˣ :=
+    ⟨sIdeleQuotientNorm ℚ ∅, (isProperMap_sIdeleQuotientNorm ℚ ∅).continuous⟩
+  let r : SIdeleQuotient ℚ ∅ → ℝ := fun x ↦ Real.log ((m x).val : ℝ)
+  let θ := modulationWeight m 1 (sLocalAdelicThetaOnClasses ℚ ∅ f)
+  have hr : Continuous r := by
+    exact Real.continuousOn_log.comp_continuous
+      (NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous))
+      (fun _ ↦ (NNReal.coe_pos.mpr (Units.zero_lt _)).ne')
+  have hθ : Continuous θ := by
+    dsimp [θ, modulationWeight]
+    fun_prop
+  have hrg : 0 < r g := Real.log_pos hg
+  have hθg' : θ g ≠ 0 := by
+    dsimp [θ, modulationWeight]
+    exact mul_ne_zero (by exact_mod_cast (pow_ne_zero 1 (Units.ne_zero (m g)))) hθg
+  have hHaar : (sLocalQuotientTamagawaMeasure ℚ ∅).IsHaarMeasure :=
+    (sLocalQuotientTamagawaMeasure_isWeil (F := ℚ) (S := ∅)).1
+  have hOpen : (sLocalQuotientTamagawaMeasure ℚ ∅).IsOpenPosMeasure :=
+    hHaar.toIsOpenPosMeasure
+  let : BorelSpace (SIdeleQuotient ℚ ∅) := ⟨rfl⟩
+  have htop := @sLocalThetaSobolev_openHalfLine_finite_false_unbounded
+    (SIdeleQuotient ℚ ∅) inferInstance inferInstance inferInstance
+    (sLocalQuotientTamagawaMeasure ℚ ∅) hOpen r hr θ hθ g hrg hθg'
+  have hfin := h ℚ ∅ 1 0 one_pos le_rfl f
+  exact hfin htop
+
 
 /-- Paper: Definition 10.1.1.1(2) and Remark 10.1.1.2, p. 434. As printed,
 the integral defining the local norm is finite at every positive weight and
