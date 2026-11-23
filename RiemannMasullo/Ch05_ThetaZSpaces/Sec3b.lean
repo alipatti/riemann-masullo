@@ -1464,11 +1464,206 @@ theorem archimedeanFlatSchwartz_one_real :
         rw [ContinuousLinearEquiv.symm_apply_apply]))
   exact ⟨e, fun f x ↦ rfl⟩
 
+private theorem archimedeanFlatSchwartz_one_complex_direction_jet
+    (f : 𝓢(ℂ, ℂ)) (u : ℂ) (n : ℕ) (v : Fin n → ℂ) :
+    iteratedFDeriv ℝ n
+      ((LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u f) : ℂ → ℂ) 0 v =
+      iteratedFDeriv ℝ (n + 1) (f : ℂ → ℂ) 0 (Fin.snoc v u) := by
+  have he : ((LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u f) : ℂ → ℂ) =
+      fun z ↦ fderiv ℝ (f : ℂ → ℂ) z u := by
+    funext z
+    exact SchwartzMap.lineDerivOp_apply_eq_fderiv _ _ _
+  rw [he, iteratedFDeriv_clm_apply_const_apply
+    ((f.smooth (n + 1)).fderiv_right (m := n) (by simp)) (by simp),
+    iteratedFDeriv_succ_apply_right]
+  simp
+
+private theorem archimedeanFlatSchwartz_one_complex_jet_linear
+    (f g : 𝓢(ℂ, ℂ)) (a b : ℂ) (n : ℕ) (v : Fin n → ℂ) :
+    iteratedFDeriv ℝ n ((a • f + b • g : 𝓢(ℂ, ℂ)) : ℂ → ℂ) 0 v =
+      a • iteratedFDeriv ℝ n (f : ℂ → ℂ) 0 v +
+      b • iteratedFDeriv ℝ n (g : ℂ → ℂ) 0 v := by
+  change iteratedFDeriv ℝ n ((fun y ↦ a • f y) + fun y ↦ b • g y) 0 v = _
+  rw [iteratedFDeriv_add_apply ((f.smooth n).const_smul a).contDiffAt
+    ((g.smooth n).const_smul b).contDiffAt,
+    iteratedFDeriv_const_smul_apply' (f.smooth n).contDiffAt,
+    iteratedFDeriv_const_smul_apply' (g.smooth n).contDiffAt]
+  rfl
+
+/-- Paper: Lemma 5.3.3.3(3), p. 252.
+Vanishing of all real Fréchet jets implies vanishing of all mixed Wirtinger jets. -/
+private theorem archimedeanFlatSchwartz_one_complex_wirtinger_of_jets (f : 𝓢(ℂ, ℂ))
+    (h : ∀ (n : ℕ) (v : Fin n → ℂ), iteratedFDeriv ℝ n (f : ℂ → ℂ) 0 v = 0) :
+    ∀ k l : ℕ, (schwartzWirtingerZ^k) ((schwartzWirtingerZBar^l) f) 0 = 0 := by
+  let P (g : 𝓢(ℂ, ℂ)) := ∀ (n : ℕ) (v : Fin n → ℂ),
+    iteratedFDeriv ℝ n (g : ℂ → ℂ) 0 v = 0
+  have hd (g : 𝓢(ℂ, ℂ)) (hg : P g) (u : ℂ) :
+      P (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u g) := by
+    intro n v
+    rw [archimedeanFlatSchwartz_one_complex_direction_jet]
+    exact hg _ _
+  have hl (g j : 𝓢(ℂ, ℂ)) (hg : P g) (hj : P j) (a b : ℂ) :
+      P (a • g + b • j) := by
+    intro n v
+    rw [archimedeanFlatSchwartz_one_complex_jet_linear, hg, hj, smul_zero, smul_zero, add_zero]
+  have hz (g : 𝓢(ℂ, ℂ)) (hg : P g) : P (schwartzWirtingerZ g) := by
+    have he : schwartzWirtingerZ g = (2 : ℂ)⁻¹ •
+        (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) (1 : ℂ) g) +
+        (-(2 : ℂ)⁻¹ * Complex.I) • (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) Complex.I g) := by
+      simp only [schwartzWirtingerZ, smul_apply, sub_apply]
+      module
+    rw [he]
+    exact hl _ _ (hd g hg 1) (hd g hg Complex.I) _ _
+  have hb (g : 𝓢(ℂ, ℂ)) (hg : P g) : P (schwartzWirtingerZBar g) := by
+    have he : schwartzWirtingerZBar g = (2 : ℂ)⁻¹ •
+        (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) (1 : ℂ) g) +
+        ((2 : ℂ)⁻¹ * Complex.I) • (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) Complex.I g) := by
+      simp only [schwartzWirtingerZBar, smul_apply, add_apply]
+      module
+    rw [he]
+    exact hl _ _ (hd g hg 1) (hd g hg Complex.I) _ _
+  have hp (T : 𝓢(ℂ, ℂ) →L[ℂ] 𝓢(ℂ, ℂ)) (hT : ∀ g, P g → P (T g))
+      (g : 𝓢(ℂ, ℂ)) (hg : P g) (k : ℕ) : P ((T ^ k) g) := by
+    induction k with
+    | zero => simpa using hg
+    | succ k ih => simpa [pow_succ'] using hT _ ih
+  intro k l
+  simpa [P] using hp _ hz _ (hp _ hb f h l) k 0 (fun i ↦ Fin.elim0 i)
+
+private theorem archimedeanFlatSchwartz_one_complex_comm :
+    Commute schwartzWirtingerZ schwartzWirtingerZBar := by
+  have hd (u v : ℂ) (g : 𝓢(ℂ, ℂ)) :
+      LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) v g) =
+      LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) v (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u g) := by
+    have he (a b z : ℂ) :
+        LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) a (LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) b g) z =
+          fderiv ℝ (fderiv ℝ (g : ℂ → ℂ)) z a b := by
+      change fderiv ℝ (fun t ↦ fderiv ℝ (g : ℂ → ℂ) t b) z a = _
+      rw [fderiv_clm_apply (c := fderiv ℝ (g : ℂ → ℂ)) (u := fun _ ↦ b)
+        (((g.smooth 2).fderiv_right (m := 1) (by decide)).differentiable (by decide) _)
+        (differentiableAt_const b)]
+      simp
+    ext z
+    rw [he, he]
+    exact ((g.smooth 2).contDiffAt.isSymmSndFDerivAt (by simp)) u v
+  apply ContinuousLinearMap.ext
+  intro g
+  change schwartzWirtingerZ (schwartzWirtingerZBar g) =
+    schwartzWirtingerZBar (schwartzWirtingerZ g)
+  simp only [schwartzWirtingerZ, schwartzWirtingerZBar, smul_apply, add_apply,
+    sub_apply, map_smul, map_add, map_sub, hd 1 Complex.I g]
+  module
+
+private theorem archimedeanFlatSchwartz_one_complex_direction
+    (f : 𝓢(ℂ, ℂ)) (u : ℂ) :
+    LineDeriv.lineDerivOpCLM ℂ 𝓢(ℂ, ℂ) u f =
+      u • schwartzWirtingerZ f + star u • schwartzWirtingerZBar f := by
+  ext z
+  change fderiv ℝ (f : ℂ → ℂ) z u = _
+  let L := fderiv ℝ (f : ℂ → ℂ) z
+  have hu : L u = u.re • L 1 + u.im • L Complex.I := by
+    rw [← map_smul, ← map_smul, ← map_add]
+    congr 1
+    simp [Complex.real_smul]
+  change L u = u * schwartzWirtingerZ f z + star u * schwartzWirtingerZBar f z
+  rw [hu, (schwartzWirtinger_apply f z).1, (schwartzWirtinger_apply f z).2]
+  change _ = u * ((L 1 - Complex.I * L Complex.I) / 2) +
+    star u * ((L 1 + Complex.I * L Complex.I) / 2)
+  simp only [Complex.real_smul]
+  conv_rhs => rw [← Complex.re_add_im u]
+  simp only [star_add, star_mul', Complex.star_def, Complex.conj_ofReal, Complex.conj_I]
+  linear_combination (L Complex.I * (u.im : ℂ)) * Complex.I_sq
+
+/-- Paper: Lemma 5.3.3.3(3), p. 252.
+Vanishing of all mixed Wirtinger jets implies vanishing of all real Fréchet jets. -/
+private theorem archimedeanFlatSchwartz_one_complex_jets_of_wirtinger (f : 𝓢(ℂ, ℂ))
+    (h : ∀ k l : ℕ, (schwartzWirtingerZ^k) ((schwartzWirtingerZBar^l) f) 0 = 0) :
+    ∀ (n : ℕ) (v : Fin n → ℂ), iteratedFDeriv ℝ n (f : ℂ → ℂ) 0 v = 0 := by
+  intro n
+  induction n generalizing f with
+  | zero => intro v; simpa using h 0 0
+  | succ n ih =>
+    have hz : ∀ k l : ℕ,
+        (schwartzWirtingerZ^k) ((schwartzWirtingerZBar^l) (schwartzWirtingerZ f)) 0 = 0 := by
+      intro k l
+      have hc := congrArg (fun T : 𝓢(ℂ, ℂ) →L[ℂ] 𝓢(ℂ, ℂ) ↦ T f)
+        (archimedeanFlatSchwartz_one_complex_comm.symm.pow_left l).eq
+      change (schwartzWirtingerZBar ^ l) (schwartzWirtingerZ f) =
+        schwartzWirtingerZ ((schwartzWirtingerZBar ^ l) f) at hc
+      rw [hc]
+      simpa [pow_succ] using h (k + 1) l
+    have hb : ∀ k l : ℕ,
+        (schwartzWirtingerZ^k) ((schwartzWirtingerZBar^l) (schwartzWirtingerZBar f)) 0 = 0 := by
+      intro k l
+      simpa [pow_succ] using h k (l + 1)
+    intro v
+    rw [← Fin.snoc_init_self v, ← archimedeanFlatSchwartz_one_complex_direction_jet,
+      archimedeanFlatSchwartz_one_complex_direction,
+      archimedeanFlatSchwartz_one_complex_jet_linear, ih _ hz, ih _ hb,
+      smul_zero, smul_zero, add_zero]
+
 /-- Paper: Lemma 5.3.3.3(3), p. 252.
 For one complex factor the real jet conditions recover the mixed Wirtinger conditions of §5.3.2. -/
 theorem archimedeanFlatSchwartz_one_complex :
     ∃ e : ↥(archimedeanFlatSchwartz (ι := Empty) (κ := Unit)) ≃L[ℂ] ↥complexSchwartzFlatAtOrigin,
-      ∀ f (z : ℂ), (e f).val z = f.val (fun i ↦ Empty.elim i, fun _ ↦ z) := by sorry
+      ∀ f (z : ℂ), (e f).val z = f.val (fun i ↦ Empty.elim i, fun _ ↦ z) := by
+  let L : ℂ ≃ₗ[ℝ] ((Empty → ℝ) × (Unit → ℂ)) :=
+    { toFun := fun z ↦ (fun i ↦ Empty.elim i, fun _ ↦ z)
+      invFun := fun p ↦ p.2 ()
+      map_add' := fun x y ↦ Prod.ext (funext fun i ↦ Empty.elim i) rfl
+      map_smul' := fun t x ↦ Prod.ext (funext fun i ↦ Empty.elim i) rfl
+      left_inv := fun x ↦ rfl
+      right_inv := fun p ↦ Prod.ext (funext fun i ↦ Empty.elim i) (funext fun _ ↦ rfl) }
+  let φ : ℂ ≃L[ℝ] ((Empty → ℝ) × (Unit → ℂ)) := L.toContinuousLinearEquiv
+  let A : 𝓢((Empty → ℝ) × (Unit → ℂ), ℂ) →L[ℂ] 𝓢(ℂ, ℂ) :=
+    SchwartzMap.compCLMOfContinuousLinearEquiv ℂ φ
+  let B : 𝓢(ℂ, ℂ) →L[ℂ] 𝓢((Empty → ℝ) × (Unit → ℂ), ℂ) :=
+    SchwartzMap.compCLMOfContinuousLinearEquiv ℂ φ.symm
+  have hA (f : 𝓢((Empty → ℝ) × (Unit → ℂ), ℂ))
+      (hf : f ∈ archimedeanFlatSchwartz (ι := Empty) (κ := Unit)) :
+      A f ∈ complexSchwartzFlatAtOrigin := by
+    rw [mem_complexSchwartzFlatAtOrigin_iff]
+    apply archimedeanFlatSchwartz_one_complex_wirtinger_of_jets
+    intro n v
+    simp only [archimedeanFlatSchwartz, Submodule.mem_iInf, LinearMap.mem_ker,
+      IsLinearMap.mk'_apply] at hf
+    have h0 := hf ⟨φ 0, Or.inr ⟨(), rfl⟩⟩ n (fun i ↦ φ (v i))
+    change iteratedFDeriv ℝ n ((f : (Empty → ℝ) × (Unit → ℂ) → ℂ) ∘ φ) 0 v = 0
+    erw [φ.toContinuousLinearMap.iteratedFDeriv_comp_right (f.smooth ⊤) 0 (i := n)
+      (mod_cast le_top)]
+    exact h0
+  have hB (g : 𝓢(ℂ, ℂ)) (hg : g ∈ complexSchwartzFlatAtOrigin) :
+      B g ∈ archimedeanFlatSchwartz (ι := Empty) (κ := Unit) := by
+    rw [mem_complexSchwartzFlatAtOrigin_iff] at hg
+    simp only [archimedeanFlatSchwartz, Submodule.mem_iInf, LinearMap.mem_ker,
+      IsLinearMap.mk'_apply]
+    rintro ⟨x, hx⟩ n v
+    have hx0 : φ.symm x = 0 := by
+      rcases hx with ⟨i, _⟩ | ⟨j, hj⟩
+      · exact i.elim
+      · cases j
+        exact hj
+    change iteratedFDeriv ℝ n ((g : ℂ → ℂ) ∘ φ.symm) x v = 0
+    erw [φ.symm.toContinuousLinearMap.iteratedFDeriv_comp_right (g.smooth ⊤) x (i := n)
+      (mod_cast le_top)]
+    rw [ContinuousMultilinearMap.compContinuousLinearMap_apply]
+    change iteratedFDeriv ℝ n (g : ℂ → ℂ) (φ.symm x) (fun i ↦ φ.symm (v i)) = 0
+    rw [hx0]
+    exact archimedeanFlatSchwartz_one_complex_jets_of_wirtinger g hg n _
+  let e : ↥(archimedeanFlatSchwartz (ι := Empty) (κ := Unit)) ≃L[ℂ]
+      ↥complexSchwartzFlatAtOrigin :=
+    ContinuousLinearEquiv.equivOfInverse
+      ((A.comp (archimedeanFlatSchwartz (ι := Empty) (κ := Unit)).subtypeL).codRestrict
+        complexSchwartzFlatAtOrigin fun f ↦ hA f f.2)
+      ((B.comp complexSchwartzFlatAtOrigin.subtypeL).codRestrict
+        (archimedeanFlatSchwartz (ι := Empty) (κ := Unit)) fun g ↦ hB g g.2)
+      (fun f ↦ Subtype.ext (SchwartzMap.ext fun y ↦ by
+        change (f.val : (Empty → ℝ) × (Unit → ℂ) → ℂ) (φ (φ.symm y)) = f.val y
+        rw [ContinuousLinearEquiv.apply_symm_apply]))
+      (fun g ↦ Subtype.ext (SchwartzMap.ext fun y ↦ by
+        change (g.val : ℂ → ℂ) (φ.symm (φ y)) = g.val y
+        rw [ContinuousLinearEquiv.symm_apply_apply]))
+  exact ⟨e, fun f z ↦ rfl⟩
 
 /-- Paper: Lemma 5.3.3.3(3), p. 252.
 Schwartz functions supported away from every coordinate hyperplane are flat along them. -/
