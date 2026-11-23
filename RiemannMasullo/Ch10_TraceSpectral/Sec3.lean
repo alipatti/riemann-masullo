@@ -306,6 +306,40 @@ theorem spectralIsotypeConvolution_mkQ (ω : PontryaginDual C₁) (φ : BruhatCo
     (hardySobolevTestAction_preserves_spectralIsotypeTheta (F := F) a hI hs ω φ) v)
   with_reducible_and_instances exact h.trans (Submodule.mkQL_apply _ _)
 
+private theorem spectralConvolution_range_isotype_aux {X V : Type*}
+    [CommGroup X] [TopologicalSpace X] [IsTopologicalGroup X] [MeasurableSpace X]
+    [BorelSpace X] (μ : Measure X) [μ.IsHaarMeasure]
+    [AddCommGroup V] [Module ℂ V] [TopologicalSpace V] [IsTopologicalAddGroup V]
+    [ContinuousSMul ℂ V] [SeparatingDual ℂ V]
+    (τ : X →* (V →L[ℂ] V)) (ψ : X → ℂ) (k : X) (c : ℂ)
+    (hψ : ∀ g, ψ (k⁻¹ * g) = c * ψ g) (u a : V)
+    (ha : HasPettisIntegral (.positive μ) (fun g ↦ ψ g • τ g u) a) :
+    τ k a = c • a := by
+  have ev (δ : StrongDual ℂ V) : δ a = ∫ g, δ (ψ g • τ g u) ∂μ :=
+    congrArg (fun z : PettisWeakCompletion V ↦
+      (show Module.Dual ℂ (StrongDual ℂ V) from z) δ) ha.2
+  apply (SeparatingDual.eq_iff_forall_dual_eq (R := ℂ)).2
+  intro δ
+  have hδ := ev (δ.comp (τ k))
+  rw [ContinuousLinearMap.comp_apply] at hδ
+  calc
+    δ (τ k a) = ∫ g, δ (τ k (ψ g • τ g u)) ∂μ := hδ
+    _ = ∫ g, δ (ψ g • τ (k * g) u) ∂μ := by
+      apply integral_congr_ae (.of_forall fun g ↦ ?_)
+      rw [(τ k).map_smul, map_mul]
+      rfl
+    _ = ∫ g, δ (ψ (k⁻¹ * g) • τ g u) ∂μ := by
+      rw [← integral_mul_left_eq_self
+        (fun g ↦ δ (ψ (k⁻¹ * g) • τ g u)) k]
+      apply integral_congr_ae (.of_forall fun g ↦ ?_)
+      simp
+    _ = c * ∫ g, δ (ψ g • τ g u) ∂μ := by
+      rw [← integral_const_mul]
+      apply integral_congr_ae (.of_forall fun g ↦ ?_)
+      rw [hψ g, mul_smul, map_smul]
+      simp
+    _ = δ (c • a) := by rw [← ev δ, map_smul]; rfl
+
 /-- Paper: Theorems 10.3.1.1(3), p. 449, and 10.3.2.1(3), p. 454.
 The full quotient action of an isotypic test has range in the corresponding quotient isotype.
 Deviation: For left translation φ(x) ↦ φ(k⁻¹x), the weight is ω as an
@@ -313,7 +347,21 @@ eigencharacter. Equivalently the pointwise covariance is φ(kx) = ω⁻¹(k)φ(x
 theorem spectralConvolution_range_isotype (ω : PontryaginDual C₁) (φ : BruhatCompactSupport C𝔽)
     (_hφ : ∀ (k : C₁) (x : C𝔽), φ.val (k.val⁻¹ * x) = (ω k : ℂ) * φ.val x) :
     range (spectralConvolution (F := F) a hI hs φ) ⊆
-      range (fun v : Wω(hI, hs, ω) ↦ (Θ(a, hI, hs)).mkQ v.val) := by sorry
+      range (fun v : Wω(hI, hs, ω) ↦ (Θ(a, hI, hs)).mkQ v.val) := by
+  have hW (v : W(l, r, s)) :
+      testAction(l, r, s, hI, hs) φ v ∈ Wω(hI, hs, ω) := by
+    rw [mem_actionIsotype]
+    intro k
+    exact spectralConvolution_range_isotype_aux μ𝔽
+      (hardySobolevTranslation μ𝔽 m𝔽 l r s hI hs) φ.val k.val (ω k : ℂ)
+      (_hφ k) v _ (bruhatRegularizedAction_apply μ𝔽
+        (hardySobolevTranslation μ𝔽 m𝔽 l r s hI hs)
+        (exists_hardySobolevTranslation μ𝔽 m𝔽 l r s hI hs).choose_spec.2 φ v)
+  intro y hy
+  obtain ⟨x, rfl⟩ := hy
+  obtain ⟨v, rfl⟩ := Submodule.mkQ_surjective (Θ(a, hI, hs)) x
+  exact ⟨⟨testAction(l, r, s, hI, hs) φ v, hW v⟩,
+    spectralConvolution_mkQ (F := F) a hI hs φ v⟩
 
 end Convolution
 
