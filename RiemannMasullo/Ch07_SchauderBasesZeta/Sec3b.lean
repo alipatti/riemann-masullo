@@ -137,6 +137,60 @@ theorem mem_sLocalPWTests (hST : S ⊆ T) (K : Set (SAdeleRing F S)) (f : B(T)) 
   exact mem_sLocalPWTests_map_span (Multiplicative.toAdd ⁻¹' K) L
     (fun g : B(S) ↦ (sAdeleSchwartzFourier g).val) hL (Π(hST)) f
 
+/-- Dirac support supplies a compactly supported test with prescribed value one. -/
+private theorem sLocalPWTests_moments_surjective_bump
+    {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
+    [T2Space G] [LocallyCompactSpace G] (x : G) (U : Set G) (hU : U ∈ 𝓝 x) :
+    ∃ f : SchwartzBruhat G, HasCompactSupport f.val ∧ tsupport f.val ⊆ U ∧ f x = 1 := by
+  classical
+  obtain ⟨U₀, hVU, hV, hxV⟩ := mem_nhds_iff.mp hU
+  obtain ⟨C, hC, hxC, hCV⟩ := exists_compact_subset hV hxV
+  obtain ⟨δ, hδ, hvan, -⟩ := schwartzBruhat_dirac_support x
+  have hex : ∃ f : SchwartzBruhat G, tsupport f.val ⊆ interior C ∧ f x ≠ 0 := by
+    by_contra! hn
+    have hxvan : x ∈ schwartzBruhatVanishingLocus δ := by
+      apply Set.mem_sUnion.mpr
+      refine ⟨interior C, ⟨isOpen_interior, ?_⟩, hxC⟩
+      intro f hf
+      rw [hδ]
+      exact hn f hf
+    rw [hvan] at hxvan
+    exact hxvan (Set.mem_singleton x)
+  obtain ⟨f, hf, hfx⟩ := hex
+  have hc : HasCompactSupport f.val :=
+    hC.of_isClosed_subset isClosed_closure (hf.trans interior_subset)
+  refine ⟨(f x)⁻¹ • f, hc.smul_left (f := fun _ ↦ (f x)⁻¹), ?_, ?_⟩
+  · exact (tsupport_smul_subset_right (fun _ ↦ (f x)⁻¹) f.val).trans
+      (hf.trans (interior_subset.trans (hCV.trans hVU)))
+  · change (f x)⁻¹ * f x = 1
+    exact inv_mul_cancel₀ hfx
+
+/-- Paper: Definitions 7.3.2.1(1) and 7.3.2.3(1), pp. 351, 355.
+Every neighborhood of zero contains the support of a compact Schwartz–Bruhat
+bump vanishing at zero and having nonzero additive Tamagawa integral.
+One can place a nonnegative bump near a nonzero point in the neighborhood. -/
+private theorem sLocalPWTests_moments_surjective_zero_bump
+    {F : Type*} [Field F] [NumberField F]
+    (S : Finset (HeightOneSpectrum (𝓞 F))) (K : Set (SAdeleRing F S)) (hK : K ∈ 𝓝 0) :
+    ∃ h : SchwartzBruhat (Multiplicative (SAdeleRing F S)),
+      HasCompactSupport h.val ∧ tsupport h.val ⊆ Multiplicative.toAdd ⁻¹' K ∧
+      h (Multiplicative.ofAdd 0) = 0 ∧
+      MeasureTheory.integral (sAdditiveTamagawaMeasure F S)
+        (fun x ↦ h (Multiplicative.ofAdd x)) ≠ 0 := by
+  sorry
+
+/-- Paper: Definitions 7.3.2.1(1) and 7.3.2.3(1), pp. 351, 355.
+Insertion of integer-ring indicators multiplies the Fourier value at zero by
+one nonzero scalar, independent of the test.
+The scalar is the product of the additive Tamagawa volumes of the inserted rings. -/
+private theorem sLocalPWTests_moments_surjective_transition
+    {F : Type*} [Field F] [NumberField F]
+    {S T : Finset (HeightOneSpectrum (𝓞 F))} (hST : S ⊆ T) :
+    ∃ c : ℂ, c ≠ 0 ∧ ∀ g : SchwartzBruhat (Multiplicative (SAdeleRing F S)),
+      sAdeleSchwartzFourier (sAdeleSchwartzTransition F hST g) (Multiplicative.ofAdd 0) =
+        c * sAdeleSchwartzFourier g (Multiplicative.ofAdd 0) := by
+  sorry
+
 /-- Paper: Definitions 7.3.2.1(1) and 7.3.2.3(1), pp. 351, 355.
 The two moments on the inserted test space can be specified independently whenever
 the Fourier region contains a neighborhood of zero, as both positive levels do.
@@ -144,7 +198,65 @@ Deviation: This uses the integer-ring transition. -/
 theorem sLocalPWTests_moments_surjective (hST : S ⊆ T) (K : Set (SAdeleRing F S))
     (hK : K ∈ 𝓝 0) (a b : ℂ) :
     ∃ f ∈ sLocalPWTests hST K, f (Multiplicative.ofAdd 0) = a ∧
-      sAdeleSchwartzFourier f (Multiplicative.ofAdd 0) = b := by sorry
+      sAdeleSchwartzFourier f (Multiplicative.ofAdd 0) = b := by
+  let G := Multiplicative (SAdeleRing F S)
+  have hG := sAdele_fourierMeasure (F := F) (S := S)
+  let : T2Space G := hG.1
+  let : LocallyCompactSpace G := hG.2.1
+  have hK' : Multiplicative.toAdd ⁻¹' K ∈ 𝓝 (Multiplicative.ofAdd (0 : SAdeleRing F S)) :=
+    continuous_toAdd.continuousAt.preimage_mem_nhds hK
+  obtain ⟨p, hpc, hpK, hp0⟩ :=
+    sLocalPWTests_moments_surjective_bump (Multiplicative.ofAdd 0) _ hK'
+  obtain ⟨q, hqc, hqK, hq0, hqI⟩ :=
+    sLocalPWTests_moments_surjective_zero_bump S K hK
+  obtain ⟨c, hc, htrans⟩ := sLocalPWTests_moments_surjective_transition (F := F) hST
+  obtain ⟨L, hL⟩ := sLocal_fourier_continuousLinear (F := F) (S := S)
+  let I := sAdeleSchwartzFourier q (Multiplicative.ofAdd 0)
+  have hI : I ≠ 0 := by
+    simpa only [I, sAdeleSchwartzFourier_apply_zero] using hqI
+  let d := b / c
+  let e := (a - d * sAdeleSchwartzFourier p (Multiplicative.ofAdd 0)) / I
+  let u := e • q + d • p
+  have hu0 : u (Multiplicative.ofAdd 0) = d := by
+    change e * q (Multiplicative.ofAdd 0) + d * p (Multiplicative.ofAdd 0) = d
+    rw [hq0, hp0, mul_zero, mul_one, zero_add]
+  have huF : sAdeleSchwartzFourier u (Multiplicative.ofAdd 0) = a := by
+    rw [← hL u]
+    change L (e • q + d • p) (Multiplicative.ofAdd 0) = a
+    rw [map_add, map_smul, map_smul]
+    change e * L q (Multiplicative.ofAdd 0) + d * L p (Multiplicative.ofAdd 0) = a
+    rw [hL q, hL p]
+    change (a - d * sAdeleSchwartzFourier p (Multiplicative.ofAdd 0)) / I * I +
+      d * sAdeleSchwartzFourier p (Multiplicative.ofAdd 0) = a
+    rw [div_mul_cancel₀ _ hI, sub_add_cancel]
+  have huc : HasCompactSupport u.val :=
+    (hqc.smul_left (f := fun _ ↦ e)).add (hpc.smul_left (f := fun _ ↦ d))
+  have huK : tsupport u.val ⊆ Multiplicative.toAdd ⁻¹' K :=
+    (tsupport_add _ _).trans (union_subset
+      ((tsupport_smul_subset_right (fun _ ↦ e) q.val).trans hqK)
+      ((tsupport_smul_subset_right (fun _ ↦ d) p.val).trans hpK))
+  let g := sAdeleSchwartzFourier (sAdeleSchwartzFourier (sAdeleSchwartzFourier u))
+  have hgF : sAdeleSchwartzFourier g = u := by
+    apply Subtype.ext
+    funext x
+    change sAdeleSchwartzFourier (sAdeleSchwartzFourier
+      (sAdeleSchwartzFourier (sAdeleSchwartzFourier u))) x = u x
+    exact (sLocal_fourier_inversion (sAdeleSchwartzFourier (sAdeleSchwartzFourier u))
+      x.toAdd).trans ((sLocal_fourier_inversion u (-x.toAdd)).trans
+        (congrArg (fun y ↦ u (Multiplicative.ofAdd y)) (neg_neg x.toAdd)))
+  have hg0 : g (Multiplicative.ofAdd 0) = a := by
+    simpa only [g, sLocal_fourier_inversion, neg_zero] using huF
+  refine ⟨sAdeleSchwartzTransition F hST g,
+    (mem_sLocalPWTests hST K _).mpr ⟨g, rfl, ?_⟩, ?_, ?_⟩
+  · rw [hgF]
+    exact ⟨huc, huK⟩
+  · rw [sAdeleSchwartzTransition_apply]
+    rw [ite_eq_left (show ∀ w : T, w.val ∉ S →
+      (0 : SAdeleRing F T).2 w ∈ w.val.adicCompletionIntegers F from
+      fun w _ ↦ (w.val.adicCompletionIntegers F).zero_mem)]
+    exact hg0
+  · rw [htrans g, hgF, hu0]
+    exact mul_div_cancel₀ b hc
 
 local notation "level(" h ", " K ", " D ", " ω ")" =>
   (((sLocalPWTests h K ⊓ D).map (q(_, ω))).topologicalClosure)
